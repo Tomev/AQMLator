@@ -1,2 +1,4 @@
 quick_tests.py
 .idea
+*csv
+__pycache__
