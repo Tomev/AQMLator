@@ -81,7 +81,12 @@ class CSVDataReceiver(DataReceiverInterface):
         data: List[LearningDatum] = []
 
         with open(data_file_path, "r") as csv_file:
-            reader = csv.reader(csv_file, "excel", delimiter=self._data_separator)
+            reader = csv.reader(
+                csv_file,
+                "excel",
+                delimiter=self._data_separator,
+                quoting=csv.QUOTE_NONNUMERIC,
+            )
 
             for row in reader:
                 row_data: List[Union[float, int, str]] = list(row)
