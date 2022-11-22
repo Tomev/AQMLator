@@ -14,7 +14,7 @@ from typing import Union, Tuple, List
 from dataclasses import dataclass
 
 
-@dataclass(init=True, repr=True, frozen=True, eq=True)
+@dataclass(init=True, repr=True, eq=True)
 class LearningDatum:
     """
     A general class for holding the user-passed learning data.
@@ -23,7 +23,7 @@ class LearningDatum:
     datum_attributes: Tuple[Union[float, str], ...]
 
 
-@dataclass(init=True, repr=True, frozen=True, eq=True)
+@dataclass(init=True, repr=True, eq=True)
 class SupervisedLearningDatum(LearningDatum):
     """
     A class for holding user-passed data for supervised learning. It holds additional

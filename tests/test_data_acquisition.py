@@ -1,11 +1,11 @@
+"""
+    This module contains tests for the data_acquisition module.
+"""
+
 __author__ = "Tomasz Rybotycki"
 
 
-"""
-    This script contains tests for the data_acquisition module.
-"""
-
-import unittest, csv, dill, os
+import unittest, csv, os
 
 from typing import Tuple, Union, List
 
@@ -80,25 +80,6 @@ class TestDataAcquisition(unittest.TestCase):
             datum_2 == datum_1, "LearningDatum equality implementation has an error."
         )
 
-    def test_learning_datum_hash(self) -> None:
-        """
-        Tests if LearningDatum class can be properly serialized.
-        """
-        x: Tuple[Union[float, str], ...] = (1.23, "lol")
-        serialized_object_file: str = "learning_datum.dil"
-        datum: LearningDatum = LearningDatum(x)
-
-        with open(serialized_object_file, "wb") as f:
-            dill.dump(datum, f)
-
-        with open(serialized_object_file, "rb") as f:
-            read_datum: LearningDatum = dill.load(f)
-
-        self.assertTrue(
-            datum == read_datum,
-            "There's some problem with the LearningDatum serialization.",
-        )
-
     def test_supervised_learning_datum_equality(self) -> None:
         """
         Tests if equality of SupervisedLearningDatum was implemented properly.
@@ -110,26 +91,6 @@ class TestDataAcquisition(unittest.TestCase):
         self.assertTrue(
             datum_2 == datum_1,
             "SupervisedLearningDatum equality implementation has an error.",
-        )
-
-    def test_supervised_learning_datum_hash(self) -> None:
-        """
-        Tests if SupervisedLearningDatum class can be properly serialized.
-        """
-        x: Tuple[Union[float, str], ...] = (1.23, "lol")
-        y: int = 1
-        serialized_object_file: str = "supervised_learning_datum.dil"
-        datum: SupervisedLearningDatum = SupervisedLearningDatum(x, y)
-
-        with open(serialized_object_file, "wb") as f:
-            dill.dump(datum, f)
-
-        with open(serialized_object_file, "rb") as f:
-            read_datum: SupervisedLearningDatum = dill.load(f)
-
-        self.assertTrue(
-            datum == read_datum,
-            "There's some problem with the SupervisedLearningDatum serialization.",
         )
 
     def test_csv_learning_data_reading(self) -> None:
