@@ -1,3 +1,9 @@
+"""
+    This module contains the functionalities required for receiving the data from
+    the user and parsing them into a format that is used throughout the rest of the
+    library.
+"""
+
 __author__ = "Tomasz Rybotycki"
 
 
