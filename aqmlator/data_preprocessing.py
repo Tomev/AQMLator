@@ -62,7 +62,7 @@ class LearningDatumMinMaxScaler:
     to extend the required functionality of `sklearn.preprocessing.MinMaxScaler`.
     """
 
-    def __init__(self, feature_range: Tuple[int, int] = (0, 1)):
+    def __init__(self, feature_range: Tuple[float, float] = (0, 1)):
         """
         A constructor for `LearningDatumMinMaxScaler`.
 
@@ -73,7 +73,7 @@ class LearningDatumMinMaxScaler:
         """
         self._feature_range = feature_range
 
-    def fit_transform(self, data: List[LearningDatum]) -> List[LearningDatum]:
+    def fit_transform(self, data: Sequence[LearningDatum]) -> Sequence[LearningDatum]:
         """
         Transforms the attributes of the `LearningDatum` objects so that they are
         within the bounds given by the `feature_range` specified in the constructor.
@@ -94,7 +94,7 @@ class LearningDatumMinMaxScaler:
             self._feature_range
         ).fit_transform(arguments)
 
-        fitted_data: List[LearningDatum] = deepcopy(data)
+        fitted_data: Sequence[LearningDatum] = deepcopy(data)
 
         for i in range(len(data)):
             fitted_data[i].datum_attributes = fitted_attributes[i]
