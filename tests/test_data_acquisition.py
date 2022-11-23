@@ -1,11 +1,11 @@
+"""
+    This module contains tests for the data_acquisition module.
+"""
+
 __author__ = "Tomasz Rybotycki"
 
 
-"""
-    This script contains tests for the data_acquisition module.
-"""
-
-import unittest, csv, dill, os
+import unittest, csv, os
 
 from typing import Tuple, Union, List
 
@@ -18,7 +18,7 @@ from aqmlator.data_acquisition import (
 
 class TestDataAcquisition(unittest.TestCase):
     """
-    A TestCase class for data_acquisition module.
+    A `TestCase` class for data_acquisition module.
     """
 
     def setUp(self) -> None:
@@ -51,9 +51,7 @@ class TestDataAcquisition(unittest.TestCase):
         """
         Ensures that the files created during the tests are deleted.
         """
-        self._ensure_deleted("learning_datum.dil")
         self._ensure_deleted("learning_data.csv")
-        self._ensure_deleted("supervised_learning_datum.dil")
         self._ensure_deleted("supervised_learning_data.csv")
 
     @staticmethod
@@ -74,29 +72,17 @@ class TestDataAcquisition(unittest.TestCase):
         Tests if equality of learning datum was implemented properly.
         """
         x: Tuple[Union[float, str], ...] = (1.23, "lol")
+        x2: Tuple[Union[float, str], ...] = (3.21, "nie_lol")
         datum_1: LearningDatum = LearningDatum(x)
         datum_2: LearningDatum = LearningDatum(x)
+        datum_3: LearningDatum = LearningDatum(x2)
+
         self.assertTrue(
             datum_2 == datum_1, "LearningDatum equality implementation has an error."
         )
 
-    def test_learning_datum_hash(self) -> None:
-        """
-        Tests if LearningDatum class can be properly serialized.
-        """
-        x: Tuple[Union[float, str], ...] = (1.23, "lol")
-        serialized_object_file: str = "learning_datum.dil"
-        datum: LearningDatum = LearningDatum(x)
-
-        with open(serialized_object_file, "wb") as f:
-            dill.dump(datum, f)
-
-        with open(serialized_object_file, "rb") as f:
-            read_datum: LearningDatum = dill.load(f)
-
-        self.assertTrue(
-            datum == read_datum,
-            "There's some problem with the LearningDatum serialization.",
+        self.assertFalse(
+            datum_1 == datum_3, "LearningDatum objects shouldn't be equal!"
         )
 
     def test_supervised_learning_datum_equality(self) -> None:
@@ -104,32 +90,24 @@ class TestDataAcquisition(unittest.TestCase):
         Tests if equality of SupervisedLearningDatum was implemented properly.
         """
         x: Tuple[Union[float, str], ...] = (1.23, "lol")
+        x2: Tuple[Union[float, str], ...] = (3.21, "nie_lol")
         y: Union[float, str, int] = 1
         datum_1: SupervisedLearningDatum = SupervisedLearningDatum(x, y)
         datum_2: SupervisedLearningDatum = SupervisedLearningDatum(x, y)
+        datum_3: SupervisedLearningDatum = SupervisedLearningDatum(x, y + 1)
+        datum_4: SupervisedLearningDatum = SupervisedLearningDatum(x2, y)
+
         self.assertTrue(
             datum_2 == datum_1,
             "SupervisedLearningDatum equality implementation has an error.",
         )
 
-    def test_supervised_learning_datum_hash(self) -> None:
-        """
-        Tests if SupervisedLearningDatum class can be properly serialized.
-        """
-        x: Tuple[Union[float, str], ...] = (1.23, "lol")
-        y: int = 1
-        serialized_object_file: str = "supervised_learning_datum.dil"
-        datum: SupervisedLearningDatum = SupervisedLearningDatum(x, y)
+        self.assertFalse(
+            datum_1 == datum_3, "SupervisedLearningDatum objects shouldn't be equal!"
+        )
 
-        with open(serialized_object_file, "wb") as f:
-            dill.dump(datum, f)
-
-        with open(serialized_object_file, "rb") as f:
-            read_datum: SupervisedLearningDatum = dill.load(f)
-
-        self.assertTrue(
-            datum == read_datum,
-            "There's some problem with the SupervisedLearningDatum serialization.",
+        self.assertFalse(
+            datum_1 == datum_4, "SupervisedLearningDatum objects shouldn't be equal!"
         )
 
     def test_csv_learning_data_reading(self) -> None:

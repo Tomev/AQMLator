@@ -1,2 +1,6 @@
 # Tests
-dill  # TODO TR: Check version
+# TODO TR: Check versions
+black
+flake8
+mypy
+pylint

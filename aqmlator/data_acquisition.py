@@ -1,14 +1,20 @@
+"""
+    This module contains the functionalities required for receiving the data from
+    the user and parsing them into a format that is used throughout the rest of the
+    library.
+"""
+
 __author__ = "Tomasz Rybotycki"
 
 
 import csv
 from os.path import exists
 from abc import ABC, abstractmethod
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Any
 from dataclasses import dataclass
 
 
-@dataclass(init=True, repr=True, frozen=True, eq=True)
+@dataclass(init=True, repr=True)
 class LearningDatum:
     """
     A general class for holding the user-passed learning data.
@@ -16,8 +22,13 @@ class LearningDatum:
 
     datum_attributes: Tuple[Union[float, str], ...]
 
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, LearningDatum):
+            return tuple(self.datum_attributes) == tuple(other.datum_attributes)
+        return NotImplemented
 
-@dataclass(init=True, repr=True, frozen=True, eq=True)
+
+@dataclass(init=True, repr=True)
 class SupervisedLearningDatum(LearningDatum):
     """
     A class for holding user-passed data for supervised learning. It holds additional
@@ -25,6 +36,14 @@ class SupervisedLearningDatum(LearningDatum):
     """
 
     datum_target: Union[float, str, int]
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, SupervisedLearningDatum):
+            return (
+                tuple(self.datum_attributes) == tuple(other.datum_attributes)
+                and self.datum_target == other.datum_target
+            )
+        return NotImplemented
 
 
 class DataReceiverInterface(ABC):
