@@ -174,13 +174,17 @@ class QNNBinaryClassifier:
         classes: Sequence[int],
     ) -> float:
         """
+        Evaluates and returns the cost function value for the training purposes.
 
-        :param features_list:
+        :param features_lists:
+            The lists of features of the objects that are being classified during the
+            training.
 
         :param classes:
+            Classes corresponding to the given features.
 
         :return:
-
+            The value of the square loss function.
         """
         expectation_values: np.ndarray = np.array(
             [self._circuit(weights, x) for x in features_lists]
@@ -188,15 +192,20 @@ class QNNBinaryClassifier:
         return np.mean((expectation_values - np.array(classes)) ** 2)
 
     def fit(
-        self, features: Sequence[Sequence[float]], classes: Sequence[int]
+        self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
     ) -> "QNNBinaryClassifier":
         """
+        The classifier training method.
 
         TODO TR: How to break this method down into smaller ones?
 
-        :param features:
+        :param features_lists:
+            The lists of features of the objects that are used during the training.
         :param classes:
+            A list of classes corresponding to the given lists of features.
+
         :return:
+            Returns self after training.
         """
         train_features: Sequence[Sequence[float]]
         validation_features: Sequence[Sequence[float]]
@@ -209,14 +218,14 @@ class QNNBinaryClassifier:
             validation_features,
             train_classes,
             validation_classes,
-        ) = train_test_split(features, classes, test_size=0.2)
+        ) = train_test_split(features_lists, classes, test_size=0.2)
 
         # Change classes to [-1, 1]. See the method description for the reasoning.
         cost_classes: np.ndarray = np.array(train_classes)
         cost_classes[cost_classes == max(cost_classes)] = 1
         cost_classes[cost_classes == min(cost_classes)] = -1
 
-        n_batches: int = max(1, len(features) // self._batch_size)
+        n_batches: int = max(1, len(features_lists) // self._batch_size)
 
         feature_batches = np.array_split(np.arange(len(train_features)), n_batches)
 
@@ -224,7 +233,7 @@ class QNNBinaryClassifier:
         best_accuracy: float = 0
 
         self._weights = np.array(self._weights, requires_grad=True)
-        cost: float = 0
+        cost: float
         batch_indices: np.tensor  # Of ints.
 
         for it, batch_indices in enumerate(
@@ -311,10 +320,8 @@ class QNNBinaryClassifier:
 
         :param features_lists:
             Features of the objects of interest.
-
         :param classes:
             The true target classes of given objects.
-
         :param weights:
             Weights that will be applied to the quantum circuit.
 
