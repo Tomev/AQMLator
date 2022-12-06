@@ -54,7 +54,7 @@ class QNNBinaryClassifier:
         n_layers: int,
         batch_size: int,
         n_epochs: int = 1,
-        dev_str: str = "lightning.qubit",
+        device_string: str = "lightning.qubit",
         optimizer: Optional[GradientDescentOptimizer] = None,
         accuracy_threshold: float = 0.8,
         initial_weights: Optional[Sequence[float]] = None,
@@ -62,24 +62,35 @@ class QNNBinaryClassifier:
         debug_flag: bool = True,
     ) -> None:
         """
+        The constructor for the QNNBinaryClassifier class.
 
         :param n_qubits:
-            Number of qubits
+            The number of qubits (and wires) used in the classification.
         :param n_layers:
+            The number of layers in the VQC.
         :param batch_size:
         :param n_epochs:
-        :param dev_str:
+            The number of training epochs.
+        :param device_string:
+            A string naming the device used to run the VQC.
         :param optimizer:
+            The optimizer that will be used in the training. `NesterovMomentumOptimizer`
+            with default parameters will be used as default.
         :param accuracy_threshold:
+            The satisfactory accuracy of the classifier.
         :param initial_weights:
+            The initial weights for the training.
         :param weights_random_seed:
+            A seed used for random weights initialization.
         :param debug_flag:
+            A flag informing the classifier if the training info should be printed
+            to the console or not.
         """
         self._n_qubits: int = n_qubits
         self._n_layers: int = n_layers
         self._n_epochs: int = n_epochs
         self._batch_size: int = batch_size
-        self._dev_str: str = dev_str
+        self._dev_str: str = device_string
 
         self._accuracy_threshold: float = accuracy_threshold
 
@@ -98,7 +109,7 @@ class QNNBinaryClassifier:
 
         self._optimizer: GradientDescentOptimizer = optimizer
 
-        self._dev = qml.device(dev_str, wires=self._n_qubits)
+        self._dev = qml.device(device_string, wires=self._n_qubits)
 
         self._circuit: Callable[
             [Sequence[float], Sequence[float]], float
@@ -149,7 +160,7 @@ class QNNBinaryClassifier:
             AmplitudeEmbedding(
                 features, wires=range(self._n_qubits), pad_with=0, normalize=True
             )
-            weights = np.array(weights).reshape(self._n_layers, self._n_qubits, 3)
+            weights = np.array(weights).reshape((self._n_layers, self._n_qubits, 3))
 
             StronglyEntanglingLayers(weights, wires=range(self._n_qubits))
             return qml.expval(qml.PauliZ((0,)))
@@ -214,12 +225,15 @@ class QNNBinaryClassifier:
 
         self._weights = np.array(self._weights, requires_grad=True)
         cost: float = 0
+        batch_indices: np.tensor  # Of ints.
 
-        for it, batch_index in enumerate(chain(*(self._n_epochs * [feature_batches]))):
+        for it, batch_indices in enumerate(
+            chain(*(self._n_epochs * [feature_batches]))
+        ):
             # Update the weights by one optimizer step
             def batch_cost(weights: Sequence[float]):
                 return self.cost(
-                    weights, train_features[batch_index], cost_classes[batch_index],
+                    weights, train_features[batch_indices], cost_classes[batch_indices],
                 )
 
             self._weights, cost = self._optimizer.step_and_cost(
@@ -228,7 +242,7 @@ class QNNBinaryClassifier:
 
             # Compute accuracy on train and validation set
             accuracy_train = self.score(
-                train_features[batch_index], train_classes[batch_index]
+                train_features[batch_indices], train_classes[batch_indices]
             )
             accuracy_validation = self.score(validation_features, validation_classes)
 
