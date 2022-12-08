@@ -30,13 +30,13 @@
 
 __author__ = "Tomasz Rybotycki"
 
-
+import torch
 import pennylane as qml
 from pennylane import numpy as np
 from pennylane.templates.layers import StronglyEntanglingLayers
 from pennylane.templates.embeddings import AmplitudeEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
-from typing import Sequence, Callable, Optional
+from typing import Sequence, Callable, Optional, Dict
 from sklearn.model_selection import train_test_split
 from itertools import chain
 
@@ -69,6 +69,7 @@ class QNNBinaryClassifier:
         :param n_layers:
             The number of layers in the VQC.
         :param batch_size:
+            Size of a batches used during the training.
         :param n_epochs:
             The number of training epochs.
         :param device_string:
@@ -339,3 +340,44 @@ class QNNBinaryClassifier:
             score += int(predictions[i] == classes[i])  # Implicit conversion to int.
 
         return score / len(features_lists)
+
+    def get_torch_layer(self) -> torch.nn.Module:
+        """
+        This method creates a PyTorch (quantum) layer based on the VQC.
+
+        TODO TR:
+            This method uses the same `circuit` method as the `_create_circuit`
+            method. Perhaps this could be shared in some way.
+
+            :return:
+                Returns a PyTorch Layer made from the VQC.
+        """
+
+        @qml.qnode(self._dev, interface="torch")
+        def circuit(inputs: Sequence[float], weights: Sequence[float]) -> float:
+            """
+            Returns the expectation value of the first qubit of the VQC of which the
+            weights are optimized during the learning process.
+
+            :param inputs:
+                Feature vector representing the object that is being classified. It
+                has to be named `inputs`, otherwise there are errors occurring.
+
+            :param weights:
+                Weights that will be optimized during the learning process.
+
+            :return:
+                The expectation value (from range[-1, 1]) of the measurement in the
+                computational basis of given circuit. This value is interpreted as
+                the classification result and its confidence.
+            """
+            AmplitudeEmbedding(
+                inputs, wires=range(self._n_qubits), pad_with=0, normalize=True,
+            )
+            weights = np.array(weights).reshape((self._n_layers, self._n_qubits, 3))
+
+            StronglyEntanglingLayers(weights, wires=range(self._n_qubits))
+            return qml.expval(qml.PauliZ((0,)))
+
+        weight_shapes: Dict[str, int] = {"weights": len(self._weights)}
+        return qml.qnn.TorchLayer(circuit, weight_shapes)
