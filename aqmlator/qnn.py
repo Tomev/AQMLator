@@ -101,7 +101,9 @@ class QNNBinaryClassifier:
 
         if initial_weights is None or len(initial_weights) != self._weights_length:
             np.random.seed(weights_random_seed)
-            initial_weights = [np.pi * np.random.rand()] * self._weights_length
+            initial_weights = [
+                np.pi * np.random.rand() for _ in range(self._weights_length)
+            ]
 
         self._weights: Sequence[float] = initial_weights
 
@@ -140,6 +142,46 @@ class QNNBinaryClassifier:
         """
         self._n_qubits = n_qubits
         self._dev = qml.device(self._dev_str, wires=self._n_qubits)
+
+    @property
+    def n_epochs(self) -> int:
+        """
+        A getter for `n_qubits` property.
+
+        :return:
+            Returns the currently set number of epochs.
+        """
+        return self._n_epochs
+
+    @property
+    def weights(self) -> Sequence[float]:
+        """
+        A getter for the `weights` property.
+
+        :return:
+            The weights
+        """
+        return self._weights
+
+    @weights.setter
+    def weights(self, weights: Sequence[float]) -> None:
+        """
+        A setter for the `weights` property.
+
+        :param weigths:
+            A new set of weights for the VQC.
+        """
+        self._weights = np.array(weights, requires_grad=True)
+
+    @n_epochs.setter
+    def n_epochs(self, n_epochs: int) -> None:
+        """
+        A setter for `n_epochs` property.
+
+        :param n_epochs:
+            The new number of epochs.
+        """
+        self._n_epochs = n_epochs
 
     def _create_circuit(self) -> Callable[[Sequence[float], Sequence[float]], float]:
         @qml.qnode(self._dev)
@@ -257,12 +299,9 @@ class QNNBinaryClassifier:
             accuracy_validation = self.score(validation_features, validation_classes)
 
             # Make decision about stopping the training basing on the validation score
-            if accuracy_validation > best_accuracy:
+            if accuracy_validation >= best_accuracy:
                 best_accuracy = accuracy_validation
                 best_weights = self._weights
-
-            if accuracy_train >= self._accuracy_threshold:
-                break
 
             if self._debug_flag:
                 print(
@@ -270,6 +309,9 @@ class QNNBinaryClassifier:
                     f" Accuracy (train): {accuracy_train} |"
                     f" Accuracy (validation): {accuracy_validation}"
                 )
+
+            if accuracy_train >= self._accuracy_threshold:
+                break
 
         self._weights = best_weights
 
@@ -354,7 +396,7 @@ class QNNBinaryClassifier:
         """
 
         @qml.qnode(self._dev, interface="torch")
-        def circuit(inputs: Sequence[float], weights: Sequence[float]) -> float:
+        def circuit(inputs: torch.Tensor, weights: torch.Tensor) -> float:
             """
             Returns the expectation value of the first qubit of the VQC of which the
             weights are optimized during the learning process.
@@ -371,10 +413,14 @@ class QNNBinaryClassifier:
                 computational basis of given circuit. This value is interpreted as
                 the classification result and its confidence.
             """
+
+            padding: torch.Tensor = torch.zeros([2 ** self._n_qubits - len(inputs)])
+            inputs = torch.cat((inputs, padding))
+
             AmplitudeEmbedding(
-                inputs, wires=range(self._n_qubits), pad_with=0, normalize=True,
+                inputs, wires=range(self._n_qubits), normalize=True,
             )
-            weights = np.array(weights).reshape((self._n_layers, self._n_qubits, 3))
+            weights = weights.reshape((self._n_layers, self._n_qubits, 3))
 
             StronglyEntanglingLayers(weights, wires=range(self._n_qubits))
             return qml.expval(qml.PauliZ((0,)))
