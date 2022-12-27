@@ -258,3 +258,12 @@ class TestQNN(unittest.TestCase):
         self.assertTrue(
             len(predictions) == len(self.x), "Torch predictions have unexpected shape."
         )
+
+    def test_executions_number_growth(self) -> None:
+        """
+        Tests if the number of executions grows when the model is executed.
+        """
+        self.classifier.predict(self.x)
+        self.assertTrue(
+            self.classifier.n_executions() > 0, "The number of executions don't grow!"
+        )

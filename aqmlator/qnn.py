@@ -178,6 +178,15 @@ class QNNBinaryClassifier:
         """
         self._n_epochs = n_epochs
 
+    def n_executions(self) -> int:
+        """
+        Returns number of VQC executions so far.
+
+        :return:
+            Returns the number of times the quantum device was called.
+        """
+        return self._dev.num_executions
+
     @property
     def weights(self) -> Sequence[float]:
         """
