@@ -36,7 +36,7 @@ from pennylane import numpy as np
 from pennylane.templates.layers import StronglyEntanglingLayers
 from pennylane.templates.embeddings import AmplitudeEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
-from typing import Sequence, Callable, Optional, Dict
+from typing import Sequence, Callable, Optional, Dict, Any
 from sklearn.model_selection import train_test_split
 from itertools import chain
 
@@ -56,6 +56,8 @@ class QNNBinaryClassifier:
         n_epochs: int = 1,
         device_string: str = "lightning.qubit",
         optimizer: Optional[GradientDescentOptimizer] = None,
+        embedding_method: Optional[qml.operation.Operation] = None,
+        embedding_kwargs: Optional[Dict[str, Any]] = None,
         accuracy_threshold: float = 0.8,
         initial_weights: Optional[Sequence[float]] = None,
         weights_random_seed: int = 42,
@@ -77,6 +79,13 @@ class QNNBinaryClassifier:
         :param optimizer:
             The optimizer that will be used in the training. `NesterovMomentumOptimizer`
             with default parameters will be used as default.
+        :param embedding_method:
+            Embedding method of the data. By default - when `None` is specified - the
+            classifier will use `AmplitudeEmbedding`. See `_prepare_default_embedding`
+            for parameters details.
+        :param embedding_kwargs:
+            Keyword arguments for the embedding method. If none are specified the
+            classifier will use the default embedding method.
         :param accuracy_threshold:
             The satisfactory accuracy of the classifier.
         :param initial_weights:
@@ -106,6 +115,12 @@ class QNNBinaryClassifier:
             ]
 
         self._weights: Sequence[float] = initial_weights
+
+        self._embedding_method: qml.operation.Operation = embedding_method
+        self._embedding_kwargs: Optional[Dict[str, Any]] = embedding_kwargs
+
+        if embedding_method is None or embedding_kwargs is None:
+            self._prepare_default_embedding()
 
         if optimizer is None:
             optimizer = NesterovMomentumOptimizer()
@@ -153,6 +168,16 @@ class QNNBinaryClassifier:
         """
         return self._n_epochs
 
+    @n_epochs.setter
+    def n_epochs(self, n_epochs: int) -> None:
+        """
+        A setter for `n_epochs` property.
+
+        :param n_epochs:
+            The new number of epochs.
+        """
+        self._n_epochs = n_epochs
+
     @property
     def weights(self) -> Sequence[float]:
         """
@@ -173,15 +198,17 @@ class QNNBinaryClassifier:
         """
         self._weights = np.array(weights, requires_grad=True)
 
-    @n_epochs.setter
-    def n_epochs(self, n_epochs: int) -> None:
+    def _prepare_default_embedding(self) -> None:
         """
-        A setter for `n_epochs` property.
-
-        :param n_epochs:
-            The new number of epochs.
+        Prepares the default embedding method is `None` was specified or if the
+        kwargs were `None`. The default one is simple `AmplitudeEmbedding`.
         """
-        self._n_epochs = n_epochs
+        self._embedding_method = AmplitudeEmbedding
+        self._embedding_kwargs = {
+            "wires": range(self._n_qubits),
+            "pad_with": 0,
+            "normalize": True,
+        }
 
     def _create_circuit(self) -> Callable[[Sequence[float], Sequence[float]], float]:
         @qml.qnode(self._dev)
@@ -200,9 +227,11 @@ class QNNBinaryClassifier:
                 computational basis of given circuit. This value is interpreted as
                 the classification result and its confidence.
             """
-            AmplitudeEmbedding(
-                features, wires=range(self._n_qubits), pad_with=0, normalize=True
-            )
+
+            # TODO TR:  This is exactly how it's called, eg.
+            #           `AmplitudeEmbedding(features, **kwargs)`.
+            #           I need to figure out how to handle this warning.
+            self._embedding_method(features, **self._embedding_kwargs)
             weights = np.array(weights).reshape((self._n_layers, self._n_qubits, 3))
 
             StronglyEntanglingLayers(weights, wires=range(self._n_qubits))
@@ -417,9 +446,10 @@ class QNNBinaryClassifier:
             padding: torch.Tensor = torch.zeros([2 ** self._n_qubits - len(inputs)])
             inputs = torch.cat((inputs, padding))
 
-            AmplitudeEmbedding(
-                inputs, wires=range(self._n_qubits), normalize=True,
-            )
+            # TODO TR:  This is exactly how it's called, eg.
+            #           `AmplitudeEmbedding(features, **kwargs)`.
+            #           I need to figure out how to handle this warning.
+            self._embedding_method(inputs, **self._embedding_kwargs)
             weights = weights.reshape((self._n_layers, self._n_qubits, 3))
 
             StronglyEntanglingLayers(weights, wires=range(self._n_qubits))
