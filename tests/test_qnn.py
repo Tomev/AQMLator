@@ -32,9 +32,13 @@ __author__ = "Tomasz Rybotycki"
 
 
 import unittest
+
+from pennylane.operation import Operation
+from pennylane.templates import StronglyEntanglingLayers
+
 import torch
 
-from typing import Sequence, List
+from typing import Sequence, List, Tuple
 from sklearn.datasets import make_moons
 from numpy.random import RandomState
 from aqmlator.qnn import QNNBinaryClassifier
@@ -67,16 +71,22 @@ class TestQNN(unittest.TestCase):
         )
 
         n_qubits: int = 2
-        n_layers: int = 3
+
+        layers: List[Operation] = [
+            StronglyEntanglingLayers
+        ] * 3  # 3 StronglyEntanglingLayers
+        layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
+
         self.n_epochs: int = 2
         batch_size: int = 20
 
         self.classifier: QNNBinaryClassifier = QNNBinaryClassifier(
             n_qubits=n_qubits,
-            n_layers=n_layers,
             batch_size=batch_size,
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
+            layers=layers,
+            layers_weights_shapes=layers_weights_shapes,
         )
 
     @staticmethod
