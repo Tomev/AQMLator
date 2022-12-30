@@ -39,6 +39,7 @@ from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimiz
 from typing import Sequence, Callable, Optional, Dict, Any, Tuple
 from sklearn.model_selection import train_test_split
 from itertools import chain
+from math import prod
 
 
 class QNNBinaryClassifier:
@@ -124,7 +125,7 @@ class QNNBinaryClassifier:
         self._weights_length: int = 0
 
         for shape in self._layers_weights_shapes:
-            self._weights_length += sum(shape)
+            self._weights_length += prod(shape)
 
         if initial_weights is None or len(initial_weights) != self._weights_length:
             np.random.seed(weights_random_seed)
@@ -276,9 +277,9 @@ class QNNBinaryClassifier:
 
             for i, layer in enumerate(self._layers):
                 layer_weights = weights[
-                    start_weights : start_weights + sum(self._layers_weights_shapes[i])
+                    start_weights : start_weights + prod(self._layers_weights_shapes[i])
                 ]
-                start_weights += sum(self._layers_weights_shapes[i])
+                start_weights += prod(self._layers_weights_shapes[i])
                 layer_weights = np.array(layer_weights).reshape(
                     self._layers_weights_shapes[i]
                 )
@@ -503,9 +504,9 @@ class QNNBinaryClassifier:
 
             for i, layer in enumerate(self._layers):
                 layer_weights = weights[
-                    start_weights : start_weights + sum(self._layers_weights_shapes[i])
+                    start_weights : start_weights + prod(self._layers_weights_shapes[i])
                 ]
-                start_weights += sum(self._layers_weights_shapes[i])
+                start_weights += prod(self._layers_weights_shapes[i])
                 layer_weights = layer_weights.reshape(self._layers_weights_shapes[i])
                 layer(layer_weights, wires=range(self._n_qubits))
 

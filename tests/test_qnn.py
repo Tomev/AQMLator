@@ -33,6 +33,7 @@ __author__ = "Tomasz Rybotycki"
 
 import unittest
 
+import pennylane
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
 
@@ -77,6 +78,11 @@ class TestQNN(unittest.TestCase):
         ] * 3  # 3 StronglyEntanglingLayers
         layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
 
+        alternate_layers: List[Operation] = [
+            pennylane.templates.BasicEntanglerLayers
+        ] * 2
+        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
+
         self.n_epochs: int = 2
         batch_size: int = 20
 
@@ -87,6 +93,15 @@ class TestQNN(unittest.TestCase):
             accuracy_threshold=accuracy_threshold,
             layers=layers,
             layers_weights_shapes=layers_weights_shapes,
+        )
+
+        self.alternate_classifier: QNNBinaryClassifier = QNNBinaryClassifier(
+            n_qubits=n_qubits,
+            batch_size=batch_size,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=accuracy_threshold,
+            layers=alternate_layers,
+            layers_weights_shapes=alternate_layers_weights_shapes,
         )
 
     @staticmethod
@@ -277,3 +292,21 @@ class TestQNN(unittest.TestCase):
         self.assertTrue(
             self.classifier.n_executions() > 0, "The number of executions don't grow!"
         )
+
+    def test_different_layers_forward_run(self) -> None:
+        """
+        Tests if making predictions is possible when different type of layers is used.
+        """
+        self.alternate_classifier.predict(self.x)
+        self.assertTrue(True, "The forward crashed!")
+
+    def test_different_layers_torch_forward_run(self) -> None:
+        """
+        Tests if making predictions with torch is possible when different type of layers
+        is used.
+        """
+        model: torch.nn.Sequential = torch.nn.Sequential(
+            self.alternate_classifier.get_torch_layer()
+        )
+        model.forward(torch.tensor(self.x))
+        self.assertTrue(True, "The torch forward crashed!")
