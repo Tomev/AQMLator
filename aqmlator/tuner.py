@@ -1,7 +1,8 @@
 """
 =============================================================================
 
-    This module contains ...
+    This module contains the classes that use optuna for different kinds of
+    optimizations - mainly model and hyperparameter.
 
 =============================================================================
 
@@ -35,10 +36,11 @@ import optuna
 import pennylane
 
 from optuna.samplers import TPESampler
-from typing import Sequence, List, Dict, Any
+from typing import Sequence, List, Dict, Any, Tuple
 from enum import IntEnum
 
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
+from pennylane.templates.layers import StronglyEntanglingLayers, BasicEntanglerLayers
 
 from aqmlator.qnn import QNNBinaryClassifier
 
@@ -46,6 +48,11 @@ from aqmlator.qnn import QNNBinaryClassifier
 class DataEmbedding(IntEnum):
     AMPLITUDE: int = 0
     ANGLE: int = 1
+
+
+class Layers(IntEnum):
+    BASIC: int = 0
+    STRONGLY_ENTANGLING: int = 1
 
 
 class ModelFinder:
@@ -112,6 +119,11 @@ class ModelFinder:
             AngleEmbedding,
         ]
 
+        self._layers: List[pennylane.operation.Operation] = [
+            BasicEntanglerLayers,
+            StronglyEntanglingLayers,
+        ]
+
     def find_model(self) -> None:
         """
         Finds the QNN model that best fits the given data.
@@ -159,14 +171,28 @@ class ModelFinder:
 
         quantum_device_calls: int = 0
 
+        layers: List[pennylane.operation.Operation] = []
+        layers_weights_shapes: List[Tuple[int, ...]] = []
+
+        for i in range(n_layers):
+            layer_index: int = trial.suggest_int(f"layer_{i}", 0, len(self._layers) - 1)
+            layers.append(self._layers[layer_index])
+
+            if layer_index == Layers.BASIC:
+                layers_weights_shapes.append((1, n_qubits))
+
+            if layer_index == Layers.STRONGLY_ENTANGLING:
+                layers_weights_shapes.append((1, n_qubits, 3))
+
         for seed in range(self._n_seeds):
             classifier: QNNBinaryClassifier = QNNBinaryClassifier(
                 n_qubits,
-                n_layers,
                 self._batch_size,
                 n_epochs=self._n_epochs,
                 embedding_method=self._embeddings[embedding_index],
                 embedding_kwargs=embedding_kwargs,
+                layers=layers,
+                layers_weights_shapes=layers_weights_shapes,
                 accuracy_threshold=self._minimal_accuracy,
                 weights_random_seed=seed,
             )
