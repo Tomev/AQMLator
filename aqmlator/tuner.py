@@ -310,23 +310,20 @@ class HyperparameterTuner:
         optimizer_kwargs: Dict[str, Any]
 
         if optimizer_index == Optimizers.ADAM:
+            # Hyperparameters range taken from arXiv:1412.6980.
             optimizer_kwargs = {
-                "stepsize": trial.suggest_float("stepsize", 0.8 * 0.01, 1.2 * 0.01),
-                "beta1": trial.suggest_float(
-                    "beta1", 0.8 * 0.9, 1.2 * 0.9
-                ),  # TODO TR: Can it be > 1?
-                "beta2": trial.suggest_float(
-                    "beta2", 0.8 * 0.01, 1.2 * 0.9
-                ),  # TODO TR: Can it be > 1?
+                "stepsize": trial.suggest_float("stepsize", 0.00001, 0.1),
+                "beta1": trial.suggest_float("beta1", 0, 0.9),
+                "beta2": trial.suggest_float("beta2", 0.99, 0.9999),
             }
             optimizer = AdamOptimizer(**optimizer_kwargs)
 
         if optimizer_index == Optimizers.NESTEROV:
+            # Hyperparameters range taken from
+            # https://cs231n.github.io/neural-networks-3/
             optimizer_kwargs = {
-                "stepsize": trial.suggest_float("stepsize", 0.8 * 0.01, 1.2 * 0.01),
-                "momentum": trial.suggest_float(
-                    "momentum", 0.8 * 0.9, 1.2 * 0.9
-                ),  # TODO TR: Can it be > 1?
+                "stepsize": trial.suggest_float("stepsize", 0.00001, 0.1),
+                "momentum": trial.suggest_float("momentum", 0.5, 0.9),
             }
             optimizer = NesterovMomentumOptimizer(**optimizer_kwargs)
 
