@@ -42,7 +42,91 @@ from itertools import chain
 from math import prod
 
 
-class QNNBinaryClassifier:
+class MLModel:
+    """
+    A boilerplate class, providing an interface for future ML models.
+    """
+
+    def __init__(
+        self, optimizer: Optional[GradientDescentOptimizer] = None,
+    ):
+        """
+        A constructor for MLModel `class`.
+        :param optimizer:
+            An optimizer that will be used during the training.
+        """
+        self._optimizer: GradientDescentOptimizer = optimizer
+        self._weights: Sequence[float]
+
+    @property
+    def optimizer(self) -> GradientDescentOptimizer:
+        """
+        A getter for the optimizer.
+        :return:
+            The current optimizer.
+        """
+        return self._optimizer
+
+    @optimizer.setter
+    def optimizer(self, optimizer: GradientDescentOptimizer) -> None:
+        """
+        A setter for optimizer.
+        :param optimizer:
+            The new optimizer.
+        """
+
+    @property
+    def weights(self) -> Sequence[float]:
+        """
+        A getter for the weights.
+        :return:
+            The current weights.
+        """
+        return self._weights
+
+    @weights.setter
+    def weights(self, weights: Sequence[float]) -> None:
+        """
+        A setter for the weights.
+
+        :param weights:
+            New weights.
+        """
+        self._weights = weights
+
+    def fit(
+        self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
+    ) -> "MLModel":
+        """
+        The model training method.
+
+        :param features_lists:
+            The lists of features of the objects that are used during the training.
+        :param classes:
+            A list of classes corresponding to the given lists of features.
+
+        :return:
+            Returns self after training.
+        """
+        raise NotImplementedError
+
+
+class QMLModel(MLModel):
+    """
+    A boilerplate class, providing an interface for future QML models.
+    """
+
+    def n_executions(self) -> int:
+        """
+        Returns number of VQC executions so far.
+
+        :return:
+            Returns the number of times the quantum device was called.
+        """
+        raise NotImplementedError
+
+
+class QNNBinaryClassifier(QMLModel):
     """
     This class implements a binary classifier that uses Quantum Neural Networks.
 
@@ -66,7 +150,7 @@ class QNNBinaryClassifier:
         debug_flag: bool = True,
     ) -> None:
         """
-        The constructor for the QNNBinaryClassifier class.
+        The constructor for the `QNNBinaryClassifier` class.
 
         :param n_qubits:
             The number of qubits (and wires) used in the classification.
@@ -133,7 +217,7 @@ class QNNBinaryClassifier:
                 np.pi * np.random.rand() for _ in range(self._weights_length)
             ]
 
-        self._weights: Sequence[float] = initial_weights
+        self._weights = initial_weights
 
         self._embedding_method: qml.operation.Operation
         self._embedding_kwargs: Dict[str, Any]
@@ -147,7 +231,9 @@ class QNNBinaryClassifier:
         if optimizer is None:
             optimizer = NesterovMomentumOptimizer()
 
-        self._optimizer: GradientDescentOptimizer = optimizer
+        super().__init__(optimizer)
+
+        # self._optimizer: GradientDescentOptimizer = optimizer
 
         self._dev = qml.device(device_string, wires=self._n_qubits)
 
@@ -245,7 +331,7 @@ class QNNBinaryClassifier:
         """
         Prepares the default layers of the classifier if `None` was given in either
         `layers` or `layers_weights_number` arguments of the constructor. We will
-        use single strongly entangling layer.
+        use a single strongly entangling layer.
         """
         self._layers = [StronglyEntanglingLayers]
         self._layers_weights_shapes = [(1, self._n_qubits, 3)]
@@ -326,7 +412,7 @@ class QNNBinaryClassifier:
             A list of classes corresponding to the given lists of features.
 
         :return:
-            Returns self after training.
+            Returns `self` after training.
         """
         train_features: Sequence[Sequence[float]]
         validation_features: Sequence[Sequence[float]]
@@ -399,14 +485,14 @@ class QNNBinaryClassifier:
         self, features_lists: Sequence[Sequence[float]]
     ) -> np.ndarray:
         """
-        Computes and returns the expectation value of the PauliZ measurement of the
+        Computes and returns the expectation value of the `PauliZ` measurement of the
         first qubit of the VQC.
 
         :param features_lists:
             Features that will be encoded at the input of the circuit.
 
         :return:
-            The expectation value of the PauliZ measurement on the first qubit of the
+            The expectation value of the `PauliZ` measurement on the first qubit of the
             VQC.
         """
         expectation_values: np.ndarray = np.zeros(len(features_lists), dtype=float)
@@ -511,11 +597,6 @@ class QNNBinaryClassifier:
                 layer(layer_weights, wires=range(self._n_qubits))
 
             return qml.expval(qml.PauliZ((0,)))
-
-            # weights = weights.reshape((self._n_layers, self._n_qubits, 3))
-
-            # StronglyEntanglingLayers(weights, wires=range(self._n_qubits))
-            # return qml.expval(qml.PauliZ((0,)))
 
         weight_shapes: Dict[str, int] = {"weights": len(self._weights)}
         return qml.qnn.TorchLayer(circuit, weight_shapes)
