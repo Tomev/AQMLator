@@ -34,7 +34,8 @@ import unittest
 
 from typing import Sequence
 
-from aqmlator.tuner import ModelFinder
+from aqmlator.tuner import ModelFinder, HyperparameterTuner
+from aqmlator.qnn import QNNBinaryClassifier
 from sklearn.datasets import make_moons
 from numpy.random import RandomState
 
@@ -73,3 +74,40 @@ class TestModelFinder(unittest.TestCase):
         """
         self.model_finder.find_model()
         self.assertTrue(True, "ModelFinder crashed while finding the model!")
+
+
+class TestHyperparameterTuner(unittest.TestCase):
+    """
+    This is a `TestCase` for the `HyperparameterTuner` class.
+    """
+
+    def setUp(self) -> None:
+        """
+        Sets up the tests.
+
+        :Note:
+            There's no return value and only a single method to test, so we strive
+            to be as minimalistic as possible.
+        """
+        x: Sequence[Sequence[float]]
+        y: Sequence[int]
+
+        x, y = make_moons(
+            n_samples=100, shuffle=True, noise=0.1, random_state=RandomState(0),
+        )
+
+        n_seeds: int = 2
+        n_trials: int = 2
+
+        classifier: QNNBinaryClassifier = QNNBinaryClassifier(2, 20, 5)
+
+        self.tuner: HyperparameterTuner = HyperparameterTuner(
+            x, y, classifier, n_seeds=n_seeds, n_trials=n_trials
+        )
+
+    def test_hyperparameter_tuner_running(self) -> None:
+        """
+        Tests if `HyperparameterTuner` runs.
+        """
+        self.tuner.find_hyperparameters()
+        self.assertTrue(True, "HyperparameterTuner crashed during tuning!")

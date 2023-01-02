@@ -35,14 +35,21 @@ import uuid
 import optuna
 import pennylane
 
+import pennylane.numpy as np
+
 from optuna.samplers import TPESampler
 from typing import Sequence, List, Dict, Any, Tuple
 from enum import IntEnum
 
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.templates.layers import StronglyEntanglingLayers, BasicEntanglerLayers
+from pennylane.optimize import (
+    NesterovMomentumOptimizer,
+    AdamOptimizer,
+    GradientDescentOptimizer,
+)
 
-from aqmlator.qnn import QNNBinaryClassifier
+from aqmlator.qnn import QNNBinaryClassifier, QMLModel
 
 
 class DataEmbedding(IntEnum):
@@ -55,9 +62,17 @@ class Layers(IntEnum):
     STRONGLY_ENTANGLING: int = 1
 
 
+class Optimizers(IntEnum):
+    NESTEROV: int = 0
+    ADAM: int = 1
+
+
 class ModelFinder:
     """
     A class for finding the best QNN model for given data.
+
+    TODO TR:    This class will have to be rewritten at some point, to be more general
+                than only a finder for the `QNNBinaryClassifier.`
     """
 
     def __init__(
@@ -84,11 +99,11 @@ class ModelFinder:
             of `features`.
         :param study_name:
             The name of the `optuna` study. If the study with this name is already
-            stored in the
+            stored in the DB, the finder will continue the study.
         :param add_uuid:
             Flag for specifying if uuid should be added to the `study_name`.
         :param minimal_accuracy:
-            Minimal accuracy after which the classification
+            Minimal accuracy after which the training will end.
         :param n_cores:
             The number of cores that `optuna` can use. The (default) value :math:`-1`
             means all of them.
@@ -149,7 +164,8 @@ class ModelFinder:
             optimizes the structure of the VQC.
 
         :param trial:
-            The `optuna` Trial object used to randomize and store the
+            The `optuna` Trial object used to randomize and store the results of the
+            optimization.
 
         :return:
             The average number of calls made to the quantum device (which `optuna`
@@ -202,3 +218,124 @@ class ModelFinder:
             quantum_device_calls += classifier.n_executions()
 
         return quantum_device_calls / self._n_seeds
+
+
+class HyperparameterTuner:
+    """
+    This class contains the optuna-based tuner for ML Training hyperparameters.
+    """
+
+    def __init__(
+        self,
+        features: Sequence[Sequence[float]],
+        classes: Sequence[int],
+        model: QMLModel,
+        study_name: str = "QML_Hyperparameter_Tuner_",
+        add_uuid: bool = True,
+        n_trials: int = 10,
+        n_cores: int = 1,
+        n_seeds: int = 1,
+    ) -> None:
+        """
+        A constructor for the `HyperparameterTuner` class.
+
+        :param features:
+            The lists of features of the objects that are used during the training.
+        :param classes:
+            A list of classes corresponding to the given lists of features.
+        :param model:
+            A model to be trained.
+        :param study_name:
+            The name of the `optuna` study. If the study with this name is already
+            stored in the DB, the tuner will continue the study.
+        :param add_uuid:
+            Flag for specifying if uuid should be added to the `study_name`.
+        :param n_cores:
+            The number of cores that `optuna` can use. The (default) value :math:`-1`
+            means all of them.
+        :param n_trials:
+            The number of trials after which the search will be finished.
+        :param n_seeds:
+            Number of seeds checked per `optuna` trial.
+        """
+        self._n_cores: int = n_cores
+        self._n_trials: int = n_trials
+        self._n_seeds: int = n_seeds
+
+        self._x: Sequence[Sequence[float]] = features
+        self._y: Sequence[int] = classes
+
+        self._study_name: str = study_name
+
+        if add_uuid:
+            self._study_name += str(uuid.uuid1())
+
+        self._optimizers: List[GradientDescentOptimizer] = [
+            AdamOptimizer,
+            NesterovMomentumOptimizer,
+        ]
+
+        self._model: QMLModel = model
+
+    def find_hyperparameters(self) -> None:
+        """
+        Finds the (sub)optimal training hyperparameters.
+        """
+        sampler: TPESampler = TPESampler(
+            seed=0, multivariate=True, group=True  # For experiments repeatability.
+        )
+
+        study: optuna.study.Study = optuna.create_study(
+            sampler=sampler, study_name=self._study_name, load_if_exists=True
+        )
+
+        study.optimize(
+            self._optuna_objective, n_trials=self._n_trials, n_jobs=self._n_cores
+        )
+
+    def _optuna_objective(self, trial: optuna.trial.Trial) -> float:
+        """
+        Objective function of the `optuna` optimizer.
+
+        :param trial:
+            The `optuna` Trial object used to randomize and store the results of the
+            optimization.
+        :return:
+        """
+        optimizer_index: int = trial.suggest_int(
+            "optimizer", 0, len(self._optimizers) - 1
+        )
+
+        optimizer: GradientDescentOptimizer
+        optimizer_kwargs: Dict[str, Any]
+
+        if optimizer_index == Optimizers.ADAM:
+            # Hyperparameters range taken from arXiv:1412.6980.
+            optimizer_kwargs = {
+                "stepsize": trial.suggest_float("stepsize", 0.00001, 0.1),
+                "beta1": trial.suggest_float("beta1", 0, 0.9),
+                "beta2": trial.suggest_float("beta2", 0.99, 0.9999),
+            }
+            optimizer = AdamOptimizer(**optimizer_kwargs)
+
+        if optimizer_index == Optimizers.NESTEROV:
+            # Hyperparameters range taken from
+            # https://cs231n.github.io/neural-networks-3/
+            optimizer_kwargs = {
+                "stepsize": trial.suggest_float("stepsize", 0.00001, 0.1),
+                "momentum": trial.suggest_float("momentum", 0.5, 0.9),
+            }
+            optimizer = NesterovMomentumOptimizer(**optimizer_kwargs)
+
+        self._model.optimizer = optimizer
+
+        initial_executions: int
+        executions_sum: int = 0
+
+        for _ in range(self._n_seeds):
+            initial_executions = self._model.n_executions()
+            self._model.weights = np.zeros_like(self._model.weights)
+            self._model.fit(self._x, self._y)
+            executions_sum += self._model.n_executions() - initial_executions
+
+        return executions_sum / self._n_seeds
