@@ -42,7 +42,7 @@ import torch
 from typing import Sequence, List, Tuple
 from sklearn.datasets import make_moons
 from numpy.random import RandomState
-from aqmlator.qnn import QNNBinaryClassifier
+from aqmlator.qml import QNNBinaryClassifier
 
 from pennylane import numpy as np
 

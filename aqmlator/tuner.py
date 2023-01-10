@@ -49,7 +49,7 @@ from pennylane.optimize import (
     GradientDescentOptimizer,
 )
 
-from aqmlator.qnn import QNNBinaryClassifier, QMLModel
+from aqmlator.qml import QNNBinaryClassifier, QMLModel
 
 
 class DataEmbedding(IntEnum):

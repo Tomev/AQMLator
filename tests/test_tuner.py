@@ -35,7 +35,7 @@ import unittest
 from typing import Sequence
 
 from aqmlator.tuner import ModelFinder, HyperparameterTuner
-from aqmlator.qnn import QNNBinaryClassifier
+from aqmlator.qml import QNNBinaryClassifier
 from sklearn.datasets import make_moons
 from numpy.random import RandomState
 
@@ -58,7 +58,10 @@ class TestModelFinder(unittest.TestCase):
         y: Sequence[int]
 
         x, y = make_moons(
-            n_samples=100, shuffle=True, noise=0.1, random_state=RandomState(0),
+            n_samples=100,
+            shuffle=True,
+            noise=0.1,
+            random_state=RandomState(0),
         )
 
         n_seeds: int = 2
@@ -93,7 +96,10 @@ class TestHyperparameterTuner(unittest.TestCase):
         y: Sequence[int]
 
         x, y = make_moons(
-            n_samples=100, shuffle=True, noise=0.1, random_state=RandomState(0),
+            n_samples=100,
+            shuffle=True,
+            noise=0.1,
+            random_state=RandomState(0),
         )
 
         n_seeds: int = 2
