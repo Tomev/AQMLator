@@ -1,4 +1,5 @@
 FROM continuumio/anaconda3
+RUN pip install requests
 RUN conda install scikit-learn
 RUN conda install dill
 RUN pip install pennylane
