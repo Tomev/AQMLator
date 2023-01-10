@@ -150,6 +150,7 @@ class QNNBinaryClassifier(QMLModel):
         accuracy_threshold: float = 0.8,
         initial_weights: Optional[Sequence[float]] = None,
         weights_random_seed: int = 42,
+        validation_set_size: float = 0.2,
         debug_flag: bool = True,
     ) -> None:
         """
@@ -177,7 +178,7 @@ class QNNBinaryClassifier(QMLModel):
             classifier will use the default embedding method.
         :param layers:
             Layers to be used in the VQC. The layers will be applied in the given order.
-            A single `StronglyEntanglingLayer` will be used if `Ńone` is given.
+            A single `StronglyEntanglingLayer` will be used if `None` is given.
         :param layers_weights_shapes:
             The shapes of the corresponding layers. Note that the default layers setup
             will be used if `None` is given.
@@ -187,6 +188,9 @@ class QNNBinaryClassifier(QMLModel):
             The initial weights for the training.
         :param weights_random_seed:
             A seed used for random weights initialization.
+        :param validation_set_size:
+            A part of the training set that will be used for classifier validation.
+            It should be from (0, 1).
         :param debug_flag:
             A flag informing the classifier if the training info should be printed
             to the console or not.
@@ -197,6 +201,7 @@ class QNNBinaryClassifier(QMLModel):
         self._dev_str: str = device_string
 
         self._accuracy_threshold: float = accuracy_threshold
+        self._validation_set_size: float = validation_set_size
 
         self._layers: Sequence[qml.operation.Operation]
         self._layers_weights_shapes: Sequence[Tuple[int, ...]]
@@ -375,7 +380,7 @@ class QNNBinaryClassifier(QMLModel):
 
         return circuit
 
-    def cost(
+    def _cost(
         self,
         weights: Sequence[float],
         features_lists: Sequence[Sequence[float]],
@@ -426,7 +431,9 @@ class QNNBinaryClassifier(QMLModel):
             validation_features,
             train_classes,
             validation_classes,
-        ) = train_test_split(features_lists, classes, test_size=0.2)
+        ) = train_test_split(
+            features_lists, classes, test_size=self._validation_set_size
+        )
 
         # Change classes to [-1, 1]. See the method description for the reasoning.
         cost_classes: np.ndarray = np.array(train_classes)
@@ -445,7 +452,17 @@ class QNNBinaryClassifier(QMLModel):
         batch_indices: np.tensor  # Of ints.
 
         def batch_cost(weights: Sequence[float]):
-            return self.cost(
+            """
+            The cost function evaluated on the training data batch.
+
+            :param weights:
+                The weights to be applied to the VQC.
+
+            :return:
+                The value of `self._cost` function evaluated of the training data
+                batch.
+            """
+            return self._cost(
                 weights,
                 train_features[batch_indices],
                 cost_classes[batch_indices],
@@ -478,7 +495,7 @@ class QNNBinaryClassifier(QMLModel):
                     f" Accuracy (validation): {accuracy_validation}"
                 )
 
-            if accuracy_train >= self._accuracy_threshold:
+            if accuracy_validation >= self._accuracy_threshold:
                 break
 
         self._weights = best_weights
@@ -626,6 +643,7 @@ class QuantumKernelBinaryClassifier(QMLModel):
         weights_random_seed: int = 42,
         accuracy_threshold: float = 0.8,
         validation_set_size: float = 0.2,
+        debug_flag: bool = True,
     ) -> None:
         """
         A constructor for the `QuantumKernelBinaryClassifier` class.
@@ -662,6 +680,9 @@ class QuantumKernelBinaryClassifier(QMLModel):
         :param validation_set_size:
             A part of the training set that will be used for classifier validation.
             It should be from (0, 1).
+        :param debug_flag:
+            A flag informing the classifier if the training info should be printed
+            to the console or not.
         """
         self._dev = qml.device(device_string, wires=n_qubits)
 
@@ -708,6 +729,8 @@ class QuantumKernelBinaryClassifier(QMLModel):
 
         if optimizer is None:
             optimizer = NesterovMomentumOptimizer()
+
+        self._debug_flag: bool = debug_flag
 
         super().__init__(optimizer)
 
@@ -930,12 +953,13 @@ class QuantumKernelBinaryClassifier(QMLModel):
 
             accuracy: float = self.accuracy(validation_features, validation_classes)
 
-            print(
-                f"Step {i + 1}: "
-                f"Alignment = {current_alignment:.3f} | "
-                f"Step cost value = {cost_val} | "
-                f"Accuracy {accuracy:.3f}"
-            )
+            if self._debug_flag:
+                print(
+                    f"Step {i + 1}: "
+                    f"Alignment = {current_alignment:.3f} | "
+                    f"Step cost value = {cost_val} | "
+                    f"Accuracy {accuracy:.3f}"
+                )
 
             if accuracy >= self._accuracy_threshold:
                 break
