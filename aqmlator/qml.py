@@ -734,7 +734,7 @@ class QuantumKernelBinaryClassifier(QMLModel):
 
         super().__init__(optimizer)
 
-        self._classifier: SVC
+        self._classifier: SVC = SVC()
 
     def _prepare_default_embedding(self) -> None:
         """
@@ -757,6 +757,43 @@ class QuantumKernelBinaryClassifier(QMLModel):
         """
         self._layers = [StronglyEntanglingLayers] * 3
         self._layers_weights_shapes = [(1, self._n_qubits, 3)] * 3
+
+    def _create_transform(self):
+
+        # TODO TR:  Refactor ansatz to be common for this and `_create_kernel` method.
+
+        def ansatz(weights: Sequence[float], features: Sequence[float]) -> None:
+            """
+            A VQC ansatz that will be used in defining the quantum kernel function.
+
+            :param weights:
+                Weights that will be optimized during the learning process.
+            :param features:
+                Feature vector representing the object that is being classified.
+            """
+
+            start_weights: int = 0
+
+            for i, layer in enumerate(self._layers):
+                # TODO TR:  This is exactly how it's called, eg.
+                #           `AmplitudeEmbedding(features, **kwargs)`.
+                #           I need to figure out how to handle this warning.
+                self._embedding_method(features, **self._embedding_kwargs)
+
+                layer_weights = weights[
+                    start_weights : start_weights + prod(self._layers_weights_shapes[i])
+                ]
+                start_weights += prod(self._layers_weights_shapes[i])
+                layer_weights = np.array(layer_weights).reshape(
+                    self._layers_weights_shapes[i]
+                )
+                layer(layer_weights, wires=range(self._n_qubits))
+
+        def transform(weights: Sequence[float], features: Sequence[float]) -> qml.measurements.ExpectationMP:
+            ansatz(weights, features)
+            return qml.expval(qml.PauliZ(wires=range(self._n_qubits)))
+
+        return transform
 
     def _create_kernel(
         self,
@@ -965,6 +1002,10 @@ class QuantumKernelBinaryClassifier(QMLModel):
                 break
 
         return self
+
+    def transform(self, features):
+        # TODO REFACTOR
+        return self._create_transform()(self._weights, features)
 
     def predict(self, features_list: Sequence[Sequence[float]]) -> Sequence[int]:
         """
