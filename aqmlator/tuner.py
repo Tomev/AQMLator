@@ -38,7 +38,7 @@ import pennylane
 import pennylane.numpy as np
 
 from optuna.samplers import TPESampler
-from typing import Sequence, List, Dict, Any, Tuple
+from typing import Sequence, List, Dict, Any, Tuple, Type, Callable
 from enum import IntEnum
 
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
@@ -49,7 +49,16 @@ from pennylane.optimize import (
     GradientDescentOptimizer,
 )
 
-from aqmlator.qnn import QNNBinaryClassifier, QMLModel
+from aqmlator.qml import QuantumKernelBinaryClassifier, QNNBinaryClassifier, QMLModel
+
+
+class MLTaskType(IntEnum):
+    BINARY_CLASSIFICATION: int = 0
+
+
+class BinaryClassifierType(IntEnum):
+    QNN: int = 0
+    QEK: int = 1
 
 
 class DataEmbedding(IntEnum):
@@ -69,14 +78,12 @@ class Optimizers(IntEnum):
 
 class ModelFinder:
     """
-    A class for finding the best QNN model for given data.
-
-    TODO TR:    This class will have to be rewritten at some point, to be more general
-                than only a finder for the `QNNBinaryClassifier.`
+    A class for finding the best QNN model for given data and task.
     """
 
     def __init__(
         self,
+        task_type: int,
         features: Sequence[Sequence[float]],
         classes: Sequence[int],
         study_name: str = "QML_Model_Finder_",
@@ -114,6 +121,7 @@ class ModelFinder:
         :param n_seeds:
             Number of seeds checked per `optuna` trial.
         """
+        self._task_type: int = task_type
         self._n_trials: int = n_trials
         self._n_cores: int = n_cores
         self._n_epochs: int = n_epochs
@@ -129,12 +137,17 @@ class ModelFinder:
         if add_uuid:
             self._study_name += str(uuid.uuid1())
 
-        self._embeddings: List[pennylane.operation.Operation] = [
+        self._binary_classifiers: List[Type[QMLModel]] = [
+            QNNBinaryClassifier,
+            QuantumKernelBinaryClassifier,
+        ]
+
+        self._embeddings: List[Type[pennylane.operation.Operation]] = [
             AmplitudeEmbedding,
             AngleEmbedding,
         ]
 
-        self._layers: List[pennylane.operation.Operation] = [
+        self._layers: List[Type[pennylane.operation.Operation]] = [
             BasicEntanglerLayers,
             StronglyEntanglingLayers,
         ]
@@ -151,17 +164,22 @@ class ModelFinder:
             sampler=sampler, study_name=self._study_name, load_if_exists=True
         )
 
-        study.optimize(
-            self._optuna_objective, n_trials=self._n_trials, n_jobs=self._n_cores
-        )
+        optuna_objective: Callable[
+            [optuna.trial.Trial], float
+        ] = self._binary_classification_objective_function
 
-    def _optuna_objective(self, trial: optuna.trial.Trial) -> float:
+        study.optimize(optuna_objective, n_trials=self._n_trials, n_jobs=self._n_cores)
+
+    def _binary_classification_objective_function(
+        self, trial: optuna.trial.Trial
+    ) -> float:
         """
-        Objective function of the `optuna` optimizer.
+        Objective function of the `optuna` optimizer for binary classification model
+        finder.
 
         :Note:
             Instead of optimizing the hyperparameters, as `optuna` usually does, this
-            optimizes the structure of the VQC.
+            optimizes the structure of the VQC for binary classification.
 
         :param trial:
             The `optuna` Trial object used to randomize and store the results of the
@@ -171,53 +189,107 @@ class ModelFinder:
             The average number of calls made to the quantum device (which `optuna`
             wants to minimize).
         """
-        embedding_index: int = trial.suggest_int(
-            "embedding", 0, len(self._embeddings) - 1
-        )
-
-        n_layers: int = trial.suggest_int("n_layers", 1, 3)
-        n_qubits: int = len(self._x[0])
-
-        embedding_kwargs: Dict[str, Any] = {}
-        embedding_kwargs["wires"] = range(n_qubits)
-
-        if embedding_index == DataEmbedding.AMPLITUDE:
-            embedding_kwargs["pad_with"] = 0
-            embedding_kwargs["normalize"] = True
-
         quantum_device_calls: int = 0
+
+        classifier_type: int = trial.suggest_int(
+            "classifier_type", 0, len(self._binary_classifiers) - 1
+        )
+        kwargs: Dict[str, Any] = {}
+
+        if classifier_type == BinaryClassifierType.QNN:
+            kwargs = self._get_qnn_binary_classifier_kwargs(trial)
+        elif classifier_type == BinaryClassifierType.QEK:
+            kwargs = self._get_qek_binary_classifier_kwargs(trial)
+
+        kwargs["n_epochs"] = self._n_epochs
+        kwargs["accuracy_threshold"] = self._minimal_accuracy
+        kwargs["weights_random_seed"] = 0
 
         layers: List[pennylane.operation.Operation] = []
         layers_weights_shapes: List[Tuple[int, ...]] = []
 
-        for i in range(n_layers):
+        for i in range(kwargs["n_layers"]):
             layer_index: int = trial.suggest_int(f"layer_{i}", 0, len(self._layers) - 1)
             layers.append(self._layers[layer_index])
 
             if layer_index == Layers.BASIC:
-                layers_weights_shapes.append((1, n_qubits))
+                layers_weights_shapes.append((1, kwargs["n_qubits"]))
 
             if layer_index == Layers.STRONGLY_ENTANGLING:
-                layers_weights_shapes.append((1, n_qubits, 3))
+                layers_weights_shapes.append((1, kwargs["n_qubits"], 3))
+
+        kwargs["layers"] = layers
+        kwargs["layers_weights_shapes"] = layers_weights_shapes
+        kwargs.pop("n_layers")
 
         for seed in range(self._n_seeds):
-            classifier: QNNBinaryClassifier = QNNBinaryClassifier(
-                n_qubits,
-                self._batch_size,
-                n_epochs=self._n_epochs,
-                embedding_method=self._embeddings[embedding_index],
-                embedding_kwargs=embedding_kwargs,
-                layers=layers,
-                layers_weights_shapes=layers_weights_shapes,
-                accuracy_threshold=self._minimal_accuracy,
-                weights_random_seed=seed,
-            )
+
+            kwargs["weights_random_seed"] = seed
+
+            classifier: QMLModel = self._binary_classifiers[classifier_type](**kwargs)
 
             classifier.fit(self._x, self._y)
 
             quantum_device_calls += classifier.n_executions()
 
         return quantum_device_calls / self._n_seeds
+
+    def _get_qnn_binary_classifier_kwargs(
+        self, trial: optuna.trial.Trial
+    ) -> Dict[str, Any]:
+        """
+        Prepares the dict of kwargs for `QNNBinaryClassifier` class.
+
+        :param trial:
+            Optuna `Trial` object that "suggests" the parameters values.
+
+        :return:
+            A dictionary with fields required for proper `QNNBinaryClassifier`
+            construction.
+        """
+        kwargs: Dict[str, Any] = {}
+
+        kwargs["n_qubits"] = len(self._x[0])
+
+        embedding_index: int = trial.suggest_int(
+            "embedding", 0, len(self._embeddings) - 1
+        )
+
+        kwargs["embedding_method"] = self._embeddings[embedding_index]
+
+        embedding_kwargs: Dict[str, Any] = {}
+        embedding_kwargs["wires"] = range(kwargs["n_qubits"])
+
+        if embedding_index == DataEmbedding.AMPLITUDE:
+            embedding_kwargs["pad_with"] = 0
+            embedding_kwargs["normalize"] = True
+
+        kwargs["embedding_kwargs"] = embedding_kwargs
+
+        kwargs["n_layers"] = trial.suggest_int("n_layers", 1, 3)
+        kwargs["batch_size"] = self._batch_size
+
+        return kwargs
+
+    def _get_qek_binary_classifier_kwargs(
+        self, trial: optuna.trial.Trial
+    ) -> Dict[str, Any]:
+        """
+        Prepares the dict of kwargs for `QuantumKernelBinaryClassifier` class.
+
+        :param trial:
+            Optuna `Trial` object that "suggests" the parameters values.
+
+        :return:
+            A dictionary with fields required for proper
+            `QuantumKernelBinaryClassifier` construction.
+        """
+        kwargs: Dict[str, Any] = {}
+
+        kwargs["n_qubits"] = len(self._x[0])
+        kwargs["n_layers"] = trial.suggest_int("n_layers", 3, 5)
+
+        return kwargs
 
 
 class HyperparameterTuner:
@@ -270,7 +342,7 @@ class HyperparameterTuner:
         if add_uuid:
             self._study_name += str(uuid.uuid1())
 
-        self._optimizers: List[GradientDescentOptimizer] = [
+        self._optimizers: List[Callable[[Any], GradientDescentOptimizer]] = [
             AdamOptimizer,
             NesterovMomentumOptimizer,
         ]

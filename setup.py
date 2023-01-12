@@ -12,7 +12,9 @@ setup(
     long_description_content_type="text/markdown",
     description="A package for auto quantum machine learning-izing your experiments!",
     packages=find_packages(exclude=["tests"]),
-    install_requires=["requests",],
+    install_requires=[
+        "requests",
+    ],
     classifiers=[
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",

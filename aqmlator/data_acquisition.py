@@ -34,6 +34,7 @@ __author__ = "Tomasz Rybotycki"
 
 
 import csv
+import locale
 from os.path import exists
 from abc import ABC, abstractmethod
 from typing import Union, Tuple, List, Any
@@ -125,7 +126,9 @@ class CSVDataReceiver(DataReceiverInterface):
 
         data: List[LearningDatum] = []
 
-        with open(data_file_path, "r") as csv_file:
+        with open(
+            data_file_path, "r", encoding=locale.getpreferredencoding()
+        ) as csv_file:
             reader = csv.reader(
                 csv_file,
                 "excel",

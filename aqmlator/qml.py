@@ -1,7 +1,7 @@
 """
 =============================================================================
 
-    This module contains the functionalities related to the Quantum Neural Networks.
+    This module contains the functionalities related to the quantum machine learning.
 
 =============================================================================
 
@@ -34,10 +34,12 @@ import torch
 import pennylane as qml
 from pennylane import numpy as np
 from pennylane.templates.layers import StronglyEntanglingLayers
-from pennylane.templates.embeddings import AmplitudeEmbedding
+from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
-from typing import Sequence, Callable, Optional, Dict, Any, Tuple
+from pennylane.kernels import target_alignment
+from typing import Sequence, Callable, Optional, Dict, Any, Tuple, List
 from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
 from itertools import chain
 from math import prod
 
@@ -48,7 +50,8 @@ class MLModel:
     """
 
     def __init__(
-        self, optimizer: Optional[GradientDescentOptimizer] = None,
+        self,
+        optimizer: Optional[GradientDescentOptimizer] = None,
     ):
         """
         A constructor for MLModel `class`.
@@ -147,6 +150,7 @@ class QNNBinaryClassifier(QMLModel):
         accuracy_threshold: float = 0.8,
         initial_weights: Optional[Sequence[float]] = None,
         weights_random_seed: int = 42,
+        validation_set_size: float = 0.2,
         debug_flag: bool = True,
     ) -> None:
         """
@@ -174,7 +178,7 @@ class QNNBinaryClassifier(QMLModel):
             classifier will use the default embedding method.
         :param layers:
             Layers to be used in the VQC. The layers will be applied in the given order.
-            A single `StronglyEntanglingLayer` will be used if `Ńone` is given.
+            A single `StronglyEntanglingLayer` will be used if `None` is given.
         :param layers_weights_shapes:
             The shapes of the corresponding layers. Note that the default layers setup
             will be used if `None` is given.
@@ -184,6 +188,9 @@ class QNNBinaryClassifier(QMLModel):
             The initial weights for the training.
         :param weights_random_seed:
             A seed used for random weights initialization.
+        :param validation_set_size:
+            A part of the training set that will be used for classifier validation.
+            It should be from (0, 1).
         :param debug_flag:
             A flag informing the classifier if the training info should be printed
             to the console or not.
@@ -194,6 +201,7 @@ class QNNBinaryClassifier(QMLModel):
         self._dev_str: str = device_string
 
         self._accuracy_threshold: float = accuracy_threshold
+        self._validation_set_size: float = validation_set_size
 
         self._layers: Sequence[qml.operation.Operation]
         self._layers_weights_shapes: Sequence[Tuple[int, ...]]
@@ -232,8 +240,6 @@ class QNNBinaryClassifier(QMLModel):
             optimizer = NesterovMomentumOptimizer()
 
         super().__init__(optimizer)
-
-        # self._optimizer: GradientDescentOptimizer = optimizer
 
         self._dev = qml.device(device_string, wires=self._n_qubits)
 
@@ -349,7 +355,7 @@ class QNNBinaryClassifier(QMLModel):
                 Feature vector representing the object that is being classified.
 
             :return:
-                The expectation value (from range[-1, 1]) of the measurement in the
+                The expectation value (from range [-1, 1]) of the measurement in the
                 computational basis of given circuit. This value is interpreted as
                 the classification result and its confidence.
             """
@@ -374,7 +380,7 @@ class QNNBinaryClassifier(QMLModel):
 
         return circuit
 
-    def cost(
+    def _cost(
         self,
         weights: Sequence[float],
         features_lists: Sequence[Sequence[float]],
@@ -425,7 +431,9 @@ class QNNBinaryClassifier(QMLModel):
             validation_features,
             train_classes,
             validation_classes,
-        ) = train_test_split(features_lists, classes, test_size=0.2)
+        ) = train_test_split(
+            features_lists, classes, test_size=self._validation_set_size
+        )
 
         # Change classes to [-1, 1]. See the method description for the reasoning.
         cost_classes: np.ndarray = np.array(train_classes)
@@ -443,14 +451,27 @@ class QNNBinaryClassifier(QMLModel):
         cost: float
         batch_indices: np.tensor  # Of ints.
 
+        def batch_cost(weights: Sequence[float]):
+            """
+            The cost function evaluated on the training data batch.
+
+            :param weights:
+                The weights to be applied to the VQC.
+
+            :return:
+                The value of `self._cost` function evaluated of the training data
+                batch.
+            """
+            return self._cost(
+                weights,
+                train_features[batch_indices],
+                cost_classes[batch_indices],
+            )
+
         for it, batch_indices in enumerate(
             chain(*(self._n_epochs * [feature_batches]))
         ):
             # Update the weights by one optimizer step
-            def batch_cost(weights: Sequence[float]):
-                return self.cost(
-                    weights, train_features[batch_indices], cost_classes[batch_indices],
-                )
 
             self._weights, cost = self._optimizer.step_and_cost(
                 batch_cost, self._weights
@@ -474,7 +495,7 @@ class QNNBinaryClassifier(QMLModel):
                     f" Accuracy (validation): {accuracy_validation}"
                 )
 
-            if accuracy_train >= self._accuracy_threshold:
+            if accuracy_validation >= self._accuracy_threshold:
                 break
 
         self._weights = best_weights
@@ -578,7 +599,7 @@ class QNNBinaryClassifier(QMLModel):
                 the classification result and its confidence.
             """
 
-            padding: torch.Tensor = torch.zeros([2 ** self._n_qubits - len(inputs)])
+            padding: torch.Tensor = torch.zeros([2**self._n_qubits - len(inputs)])
             inputs = torch.cat((inputs, padding))
 
             # TODO TR:  This is exactly how it's called, eg.
@@ -600,3 +621,467 @@ class QNNBinaryClassifier(QMLModel):
 
         weight_shapes: Dict[str, int] = {"weights": len(self._weights)}
         return qml.qnn.TorchLayer(circuit, weight_shapes)
+
+
+class QuantumKernelBinaryClassifier(QMLModel):
+    """
+    This class implements the binary classifier based on quantum kernels.
+    """
+
+    def __init__(
+        self,
+        n_qubits: int,
+        n_epochs: int = 10,
+        kta_subset_size: int = 5,
+        device_string: str = "lightning.qubit",
+        optimizer: Optional[GradientDescentOptimizer] = None,
+        embedding_method: Optional[qml.operation.Operation] = None,
+        embedding_kwargs: Optional[Dict[str, Any]] = None,
+        layers: Optional[Sequence[qml.operation.Operation]] = None,
+        layers_weights_shapes: Optional[Sequence[Tuple[int, ...]]] = None,
+        initial_weights: Optional[Sequence[float]] = None,
+        weights_random_seed: int = 42,
+        accuracy_threshold: float = 0.8,
+        validation_set_size: float = 0.2,
+        debug_flag: bool = True,
+    ) -> None:
+        """
+        A constructor for the `QuantumKernelBinaryClassifier` class.
+
+        :param n_qubits:
+            The number of qubits in the kernel VQC.
+        :param n_epochs:
+            The maximal number of training iterations.
+        :param kta_subset_size:
+            The number of objects used to evaluate the kernel target alignment method
+            in the cost function.
+        :param device_string:
+            A string naming the device used to run the VQC.
+        :param optimizer:
+            The optimizer that will be used in the training. `NesterovMomentumOptimizer`
+            with default parameters will be used as default.
+        :param embedding_method:
+            Embedding method of the data. By default - when `None` is specified - the
+            classifier will use `AngleEmbedding`. See `_prepare_default_embedding`
+            for parameters details.
+        :param embedding_kwargs:
+            Keyword arguments for the embedding method. If none are specified the
+            classifier will use the default embedding method.
+        :param layers:
+            A list of `layer` functions to be applied in the kernel ansatz VQC.
+        :param layers_weights_shapes:
+            The parameters for the `layer` methods corresponding to the `layers`.
+        :param initial_weights:
+            The weights using which the training will start.
+        :param weights_random_seed:
+            A random seed used to initialize the weights (if no weights are given).
+        :param accuracy_threshold:
+            The accuracy after which the training is considered complete.
+        :param validation_set_size:
+            A part of the training set that will be used for classifier validation.
+            It should be from (0, 1).
+        :param debug_flag:
+            A flag informing the classifier if the training info should be printed
+            to the console or not.
+        """
+        self._dev = qml.device(device_string, wires=n_qubits)
+
+        self._n_qubits: int = n_qubits
+        self._n_epochs: int = n_epochs
+
+        self._kta_subset_size: int = kta_subset_size
+
+        self._accuracy_threshold = accuracy_threshold
+        self._validation_set_size = validation_set_size
+
+        self._layers: Sequence[qml.operation.Operation]
+        self._layers_weights_shapes: Sequence[Tuple[int, ...]]
+
+        if layers is None or layers_weights_shapes is None:
+            self._prepare_default_layers()
+        elif len(layers) != len(layers_weights_shapes):
+            self._prepare_default_layers()
+        else:
+            self._layers = layers
+            self._layers_weights_shapes = layers_weights_shapes
+
+        self._embedding_method: qml.operation.Operation
+        self._embedding_kwargs: Dict[str, Any]
+
+        if embedding_method is None or embedding_kwargs is None:
+            self._prepare_default_embedding()
+        else:
+            self._embedding_method = embedding_method
+            self._embedding_kwargs = embedding_kwargs
+
+        self._weights_length: int = 0
+
+        for shape in self._layers_weights_shapes:
+            self._weights_length += prod(shape)
+
+        if initial_weights is None or len(initial_weights) != self._weights_length:
+            np.random.seed(weights_random_seed)
+            initial_weights = [
+                np.pi * np.random.rand() for _ in range(self._weights_length)
+            ]
+
+        self._weights = np.array(initial_weights, requires_grad=True)
+
+        if optimizer is None:
+            optimizer = NesterovMomentumOptimizer()
+
+        self._debug_flag: bool = debug_flag
+
+        super().__init__(optimizer)
+
+        self._classifier: SVC = SVC()
+
+    @property
+    def n_epochs(self) -> int:
+        """
+        A getter for `n_qubits` property.
+
+        :return:
+            Returns the currently set number of epochs.
+        """
+        return self._n_epochs
+
+    @n_epochs.setter
+    def n_epochs(self, n_epochs: int) -> None:
+        """
+        A setter for `n_epochs` property.
+
+        :param n_epochs:
+            The new number of epochs.
+        """
+        self._n_epochs = n_epochs
+
+    def n_executions(self) -> int:
+        """
+        Returns number of VQC executions so far.
+
+        :return:
+            Returns the number of times the quantum device was called.
+        """
+        return self._dev.num_executions
+
+    def _prepare_default_embedding(self) -> None:
+        """
+        Prepares the default embedding method is `None` was specified or if the
+        kwargs were `None`. The default one is simple `AngleEmbedding`.
+
+        Note:
+            We use `AngleEmbedding` here, because we will apply the embedding multiple
+            times (at the beginning of each layer), which cannot be done with
+            `AmplitudeEmbedding`.
+        """
+        self._embedding_method = AngleEmbedding
+        self._embedding_kwargs = {"wires": range(self._n_qubits)}
+
+    def _prepare_default_layers(self) -> None:
+        """
+        Prepares the default layers of the classifier if `None` was given in either
+        `layers` or `layers_weights_number` arguments of the constructor. We will
+        use a triple strongly entangling layer.
+        """
+        self._layers = [StronglyEntanglingLayers] * 3
+        self._layers_weights_shapes = [(1, self._n_qubits, 3)] * 3
+
+    def _ansatz(self, weights: Sequence[float], features: Sequence[float]) -> None:
+        """
+        A VQC ansatz that will be used in defining the quantum kernel function.
+
+        :param weights:
+            Weights that will be optimized during the learning process.
+        :param features:
+            Feature vector representing the object that is being classified.
+        """
+
+        start_weights: int = 0
+
+        for i, layer in enumerate(self._layers):
+            # TODO TR:  This is exactly how it's called, eg.
+            #           `AmplitudeEmbedding(features, **kwargs)`.
+            #           I need to figure out how to handle this warning.
+            self._embedding_method(features, **self._embedding_kwargs)
+
+            layer_weights = weights[
+                start_weights : start_weights + prod(self._layers_weights_shapes[i])
+            ]
+            start_weights += prod(self._layers_weights_shapes[i])
+            layer_weights = np.array(layer_weights).reshape(
+                self._layers_weights_shapes[i]
+            )
+            layer(layer_weights, wires=range(self._n_qubits))
+
+    def _create_transform(
+        self,
+    ) -> Callable[
+        [Sequence[float], Sequence[float]], List[qml.measurements.ExpectationMP]
+    ]:
+        """
+        Creates a feature map VQC based on the current kernel.
+
+        :return:
+            The feature map VQC based on the current kernel.
+        """
+
+        @qml.qnode(self._dev)
+        def transform(
+            weights: Sequence[float], features: Sequence[float]
+        ) -> List[qml.measurements.ExpectationMP]:
+            """
+            The definition of the feature map VQC.
+
+            :param weights:
+                Parameters of the VQC.
+            :param features:
+                The features of the object to be transformed.
+
+            :return:
+                The result of `qml.PauliZ` measurements on the feature map VQC.
+            """
+            self._ansatz(weights, features)
+
+            # TODO TR: Is this a good measurement to return?
+            return [qml.expval(qml.PauliZ(i)) for i in range(self._n_qubits)]
+
+        return transform
+
+    def _create_kernel(
+        self,
+    ) -> Callable[[Sequence[float], Sequence[float], Sequence[float]], float]:
+        """
+        Prepares the VQC that will return the quantum kernel value for given data
+        points.
+
+        :return:
+            The VQC structure representing the kernel function.
+        """
+
+        # Adjoint circuits is prepared pretty easily.
+        adjoint_ansatz: Callable[
+            [Sequence[float], Sequence[float]], None
+        ] = qml.adjoint(self._ansatz)
+
+        @qml.qnode(self._dev)
+        def kernel_circuit(
+            weights: Sequence[float],
+            first_features: Sequence[float],
+            second_features: Sequence[float],
+        ) -> qml.measurements.ProbabilityMP:
+            """
+            The VQC returning the quantum embedding kernel circuit based on given
+            ansatz.
+
+            :param weights:
+                Weights to be applied to the VQC ansatz.
+            :param first_features:
+                Features of the first object.
+            :param second_features:
+                Features of the second objects.
+
+            :return:
+                The probability of observing respective computational-base states.
+            """
+            self._ansatz(weights, first_features)
+            adjoint_ansatz(weights, second_features)
+            return qml.probs(wires=range(self._n_qubits))
+
+        def kernel(
+            weights: Sequence[float],
+            first_features: Sequence[float],
+            second_features: Sequence[float],
+        ) -> float:
+            """
+            A method representing the quantum embedding kernel based on the given
+            ansatz.
+
+            :param weights:
+                Weights to be applied to the VQC ansatz.
+            :param first_features:
+                Features of the first object.
+            :param second_features:
+                Features of the second objects.
+
+            :return:
+                The value of the kernel (or of measuring the zero state after running
+                the VQC).
+            """
+
+            # The `np.array` casting is required so that indexing is "legal".
+            return np.array(kernel_circuit(weights, first_features, second_features))[0]
+
+        return kernel
+
+    def fit(
+        self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
+    ) -> "QuantumKernelBinaryClassifier":
+        """
+        The classifier training method.
+
+        TODO TR: How to break this method down into smaller ones?
+
+        :param features_lists:
+            The lists of features of the objects that are used during the training.
+        :param classes:
+            A list of classes corresponding to the given lists of features.
+
+        :return:
+            Returns `self` after training.
+        """
+
+        kernel: Callable[
+            [Sequence[float], Sequence[float], Sequence[float]], float
+        ] = self._create_kernel()
+
+        train_features: Sequence[Sequence[float]]
+        validation_features: Sequence[Sequence[float]]
+
+        train_classes: Sequence[int]
+        validation_classes: Sequence[int]
+
+        (
+            train_features,
+            validation_features,
+            train_classes,
+            validation_classes,
+        ) = train_test_split(
+            features_lists, classes, test_size=self._validation_set_size
+        )
+
+        def cost(weights: Sequence[float]) -> float:
+            """
+            A cost function used during the learning. We will use negative of kernel
+            target alignment method, as the `pennylane` optimizers are meant for
+            minimizing the objective function and `target_alignment` function is a
+            similarity measure between the kernels.
+
+            :param weights:
+                Weights to be applied into kernel VQC.
+
+            :return:
+                The negative value of KTA for given weights.
+            """
+
+            # Choose subset of datapoints to compute the KTA on.
+            subset = np.random.choice(
+                list(range(len(train_features))), self._kta_subset_size
+            )
+
+            return -target_alignment(
+                list(train_features[subset]),
+                list(train_classes[subset]),
+                lambda x1, x2: self._create_kernel()(weights, x1, x2),
+                assume_normalized_kernel=True,
+            )
+
+        for i in range(self._n_epochs):
+
+            self._weights, cost_val = self._optimizer.step_and_cost(cost, self._weights)
+
+            current_alignment = target_alignment(
+                list(features_lists),
+                list(classes),
+                lambda x1, x2: kernel(self._weights, x1, x2),
+                assume_normalized_kernel=True,
+            )
+
+            # Second create a kernel matrix function using the trained kernel.
+            def kernel_matrix_function(
+                features_lists: Sequence[Sequence[float]], classes: Sequence[int]
+            ) -> Callable[[Sequence[float], Sequence[float]], float]:
+                """
+                Prepares and returns the `kernel_matrix` function that uses the
+                trained kernel.
+
+                :param features_lists:
+                    The lists of features of the objects that are used during the
+                    training.
+                :param classes:
+                    The classes corresponding to the given features.
+
+                :return:
+                    The `kernel_matrix` function that uses the trained kernel.
+                """
+                return qml.kernels.kernel_matrix(
+                    features_lists,
+                    classes,
+                    lambda x1, x2: kernel(self._weights, x1, x2),
+                )
+
+            self._classifier = SVC(kernel=kernel_matrix_function).fit(
+                features_lists, classes
+            )
+
+            accuracy: float = self.accuracy(validation_features, validation_classes)
+
+            if self._debug_flag:
+                print(
+                    f"Step {i + 1}: "
+                    f"Alignment = {current_alignment:.3f} | "
+                    f"Step cost value = {cost_val} | "
+                    f"Validation Accuracy {accuracy:.3f}"
+                )
+                print(self._weights)
+
+            if accuracy >= self._accuracy_threshold:
+                break
+
+        return self
+
+    def transform(
+        self, features_lists: Sequence[Sequence[float]]
+    ) -> List[List[qml.measurements.ExpectationMP]]:
+        """
+        Maps the object described by the `features` into it's representation in the
+        feature space.
+
+        :param features_lists:
+            The features of the object to be mapped.
+
+        :return:
+            The representation of the given object in the feature space.
+        """
+        transform: Callable[
+            [Sequence[float], Sequence[float]], List[qml.measurements.ExpectationMP]
+        ] = self._create_transform()
+
+        mapped_features: List[List[qml.measurements.ExpectationMP]] = []
+
+        for features_list in features_lists:
+            mapped_features.append(transform(self._weights, features_list))
+
+        return mapped_features
+
+    def predict(self, features_lists: Sequence[Sequence[float]]) -> Sequence[int]:
+        """
+        Predicts and returns the classes of the objects for which features were given.
+        It applies current `self.weights` as the parameters of VQC.
+
+        :param features_lists:
+            Objects' features to be encoded at the input of the VQC.
+
+        :return:
+            The results - classes 0 or 1 - of the classification. The data structure of
+            the returned object is `np.ndarray` with `dtype=bool`.
+        """
+        return self._classifier.predict(features_lists)
+
+    def accuracy(
+        self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
+    ) -> float:
+        """
+        Computes the accuracy of current classifier, given the objects and their
+        classes to check.
+
+        :param features_lists:
+            The features of the object to classify.
+        :param classes:
+            The classes of the given objects.
+        :return:
+            Tha accuracy of current classifier.
+        """
+        predicted_classes: Sequence[int] = self.predict(features_lists)
+        # A hax is used here, where we sum the arrays of bools.
+        return sum(np.array(predicted_classes) == np.array(classes)) / len(classes)
