@@ -36,6 +36,7 @@ import unittest
 import pennylane
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
+from pennylane.measurements import ExpectationMP
 
 import torch
 
@@ -345,24 +346,26 @@ class TestQEKBinaryClassifier(unittest.TestCase):
             if self.y[i] == 0:
                 self.y[i] = -1
 
-        n_qubits: int = 2
+        self.n_qubits: int = 2
 
         layers: List[Operation] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
-        layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
+        layers_weights_shapes: List[Tuple[int, ...]] = [(1, self.n_qubits, 3)] * 3
 
         self.weights_length: int = 18
 
         alternate_layers: List[Operation] = [
             pennylane.templates.BasicEntanglerLayers
         ] * 3
-        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
+        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [
+            (1, self.n_qubits)
+        ] * 2
 
         self.n_epochs: int = 1
 
         self.classifier: QuantumKernelBinaryClassifier = QuantumKernelBinaryClassifier(
-            n_qubits=n_qubits,
+            n_qubits=self.n_qubits,
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
@@ -371,7 +374,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.alternate_classifier: QuantumKernelBinaryClassifier = (
             QuantumKernelBinaryClassifier(
-                n_qubits=n_qubits,
+                n_qubits=self.n_qubits,
                 n_epochs=self.n_epochs,
                 accuracy_threshold=accuracy_threshold,
                 layers=alternate_layers,
@@ -447,3 +450,29 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         self.assertTrue(True, "The learning crashed!")
         self.alternate_classifier.predict(self.x)
         self.assertTrue(True, "The predicting crashed!")
+
+    def test_transform_run(self) -> None:
+        """
+        Checks if `classifier.transform` runs.
+        """
+        self.classifier.fit(self.x, self.y)
+        self.classifier.transform(self.x)
+        self.assertTrue(True, "Transform crashed!")
+
+    def test_transform_dimension(self) -> None:
+        """
+        Checks if `classifier.transform` dimensions are as expected.
+        """
+        self.classifier.fit(self.x, self.y)
+        mapped_x: List[ExpectationMP] = self.classifier.transform(self.x)
+
+        self.assertTrue(
+            len(mapped_x) == len(self.x),
+            f"The results number is incorrect ({len(mapped_x)} != {len(self.x)})!",
+        )
+
+        for x in mapped_x:
+            self.assertTrue(
+                len(np.array(x)) == self.n_qubits,
+                f"Dimension of the results is incorrect! ({len(np.array(x))} != {self.n_qubits})",
+            )

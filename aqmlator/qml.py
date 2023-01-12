@@ -37,7 +37,7 @@ from pennylane.templates.layers import StronglyEntanglingLayers
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
 from pennylane.kernels import target_alignment
-from typing import Sequence, Callable, Optional, Dict, Any, Tuple
+from typing import Sequence, Callable, Optional, Dict, Any, Tuple, List
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
 from itertools import chain
@@ -816,7 +816,9 @@ class QuantumKernelBinaryClassifier(QMLModel):
 
     def _create_transform(
         self,
-    ) -> Callable[[Sequence[float], Sequence[float]], qml.measurements.ExpectationMP]:
+    ) -> Callable[
+        [Sequence[float], Sequence[float]], List[qml.measurements.ExpectationMP]
+    ]:
         """
         Creates a feature map VQC based on the current kernel.
 
@@ -827,7 +829,7 @@ class QuantumKernelBinaryClassifier(QMLModel):
         @qml.qnode(self._dev)
         def transform(
             weights: Sequence[float], features: Sequence[float]
-        ) -> qml.measurements.ExpectationMP:
+        ) -> List[qml.measurements.ExpectationMP]:
             """
             The definition of the feature map VQC.
 
@@ -842,7 +844,7 @@ class QuantumKernelBinaryClassifier(QMLModel):
             self._ansatz(weights, features)
 
             # TODO TR: Is this a good measurement to return?
-            return qml.expval(qml.PauliZ(wires=range(self._n_qubits)))
+            return [qml.expval(qml.PauliZ(i)) for i in range(self._n_qubits)]
 
         return transform
 
@@ -1028,20 +1030,31 @@ class QuantumKernelBinaryClassifier(QMLModel):
 
         return self
 
-    def transform(self, features: Sequence[float]) -> qml.measurements.ExpectationMP:
+    def transform(
+        self, features_lists: Sequence[Sequence[float]]
+    ) -> List[List[qml.measurements.ExpectationMP]]:
         """
         Maps the object described by the `features` into it's representation in the
         feature space.
 
-        :param features:
+        :param features_lists:
             The features of the object to be mapped.
 
         :return:
             The representation of the given object in the feature space.
         """
-        return self._create_transform()(self._weights, features)
+        transform: Callable[
+            [Sequence[float], Sequence[float]], List[qml.measurements.ExpectationMP]
+        ] = self._create_transform()
 
-    def predict(self, features_list: Sequence[Sequence[float]]) -> Sequence[int]:
+        mapped_features: List[List[qml.measurements.ExpectationMP]] = []
+
+        for features_list in features_lists:
+            mapped_features.append(transform(self._weights, features_list))
+
+        return mapped_features
+
+    def predict(self, features_lists: Sequence[Sequence[float]]) -> Sequence[int]:
         """
         Predicts and returns the classes of the objects for which features were given.
         It applies current `self.weights` as the parameters of VQC.
@@ -1053,7 +1066,7 @@ class QuantumKernelBinaryClassifier(QMLModel):
             The results - classes 0 or 1 - of the classification. The data structure of
             the returned object is `np.ndarray` with `dtype=bool`.
         """
-        return self._classifier.predict(features_list)
+        return self._classifier.predict(features_lists)
 
     def accuracy(
         self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
