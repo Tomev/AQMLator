@@ -787,41 +787,61 @@ class QuantumKernelBinaryClassifier(QMLModel):
         self._layers = [StronglyEntanglingLayers] * 3
         self._layers_weights_shapes = [(1, self._n_qubits, 3)] * 3
 
-    def _create_transform(self):
+    def _ansatz(self, weights: Sequence[float], features: Sequence[float]) -> None:
+        """
+        A VQC ansatz that will be used in defining the quantum kernel function.
 
-        # TODO TR:  Refactor ansatz to be common for this and `_create_kernel` method.
+        :param weights:
+            Weights that will be optimized during the learning process.
+        :param features:
+            Feature vector representing the object that is being classified.
+        """
 
-        def ansatz(weights: Sequence[float], features: Sequence[float]) -> None:
-            """
-            A VQC ansatz that will be used in defining the quantum kernel function.
+        start_weights: int = 0
 
-            :param weights:
-                Weights that will be optimized during the learning process.
-            :param features:
-                Feature vector representing the object that is being classified.
-            """
+        for i, layer in enumerate(self._layers):
+            # TODO TR:  This is exactly how it's called, eg.
+            #           `AmplitudeEmbedding(features, **kwargs)`.
+            #           I need to figure out how to handle this warning.
+            self._embedding_method(features, **self._embedding_kwargs)
 
-            start_weights: int = 0
+            layer_weights = weights[
+                start_weights : start_weights + prod(self._layers_weights_shapes[i])
+            ]
+            start_weights += prod(self._layers_weights_shapes[i])
+            layer_weights = np.array(layer_weights).reshape(
+                self._layers_weights_shapes[i]
+            )
+            layer(layer_weights, wires=range(self._n_qubits))
 
-            for i, layer in enumerate(self._layers):
-                # TODO TR:  This is exactly how it's called, eg.
-                #           `AmplitudeEmbedding(features, **kwargs)`.
-                #           I need to figure out how to handle this warning.
-                self._embedding_method(features, **self._embedding_kwargs)
+    def _create_transform(
+        self,
+    ) -> Callable[[Sequence[float], Sequence[float]], qml.measurements.ExpectationMP]:
+        """
+        Creates a feature map VQC based on the current kernel.
 
-                layer_weights = weights[
-                    start_weights : start_weights + prod(self._layers_weights_shapes[i])
-                ]
-                start_weights += prod(self._layers_weights_shapes[i])
-                layer_weights = np.array(layer_weights).reshape(
-                    self._layers_weights_shapes[i]
-                )
-                layer(layer_weights, wires=range(self._n_qubits))
+        :return:
+            The feature map VQC based on the current kernel.
+        """
 
+        @qml.qnode(self._dev)
         def transform(
             weights: Sequence[float], features: Sequence[float]
         ) -> qml.measurements.ExpectationMP:
-            ansatz(weights, features)
+            """
+            The definition of the feature map VQC.
+
+            :param weights:
+                Parameters of the VQC.
+            :param features:
+                The features of the object to be transformed.
+
+            :return:
+                The result of `qml.PauliZ` measurements on the feature map VQC.
+            """
+            self._ansatz(weights, features)
+
+            # TODO TR: Is this a good measurement to return?
             return qml.expval(qml.PauliZ(wires=range(self._n_qubits)))
 
         return transform
@@ -837,37 +857,10 @@ class QuantumKernelBinaryClassifier(QMLModel):
             The VQC structure representing the kernel function.
         """
 
-        def ansatz(weights: Sequence[float], features: Sequence[float]) -> None:
-            """
-            A VQC ansatz that will be used in defining the quantum kernel function.
-
-            :param weights:
-                Weights that will be optimized during the learning process.
-            :param features:
-                Feature vector representing the object that is being classified.
-            """
-
-            start_weights: int = 0
-
-            for i, layer in enumerate(self._layers):
-                # TODO TR:  This is exactly how it's called, eg.
-                #           `AmplitudeEmbedding(features, **kwargs)`.
-                #           I need to figure out how to handle this warning.
-                self._embedding_method(features, **self._embedding_kwargs)
-
-                layer_weights = weights[
-                    start_weights : start_weights + prod(self._layers_weights_shapes[i])
-                ]
-                start_weights += prod(self._layers_weights_shapes[i])
-                layer_weights = np.array(layer_weights).reshape(
-                    self._layers_weights_shapes[i]
-                )
-                layer(layer_weights, wires=range(self._n_qubits))
-
         # Adjoint circuits is prepared pretty easily.
         adjoint_ansatz: Callable[
             [Sequence[float], Sequence[float]], None
-        ] = qml.adjoint(ansatz)
+        ] = qml.adjoint(self._ansatz)
 
         @qml.qnode(self._dev)
         def kernel_circuit(
@@ -889,7 +882,7 @@ class QuantumKernelBinaryClassifier(QMLModel):
             :return:
                 The probability of observing respective computational-base states.
             """
-            ansatz(weights, first_features)
+            self._ansatz(weights, first_features)
             adjoint_ansatz(weights, second_features)
             return qml.probs(wires=range(self._n_qubits))
 
@@ -1035,8 +1028,17 @@ class QuantumKernelBinaryClassifier(QMLModel):
 
         return self
 
-    def transform(self, features):
-        # TODO REFACTOR
+    def transform(self, features: Sequence[float]) -> qml.measurements.ExpectationMP:
+        """
+        Maps the object described by the `features` into it's representation in the
+        feature space.
+
+        :param features:
+            The features of the object to be mapped.
+
+        :return:
+            The representation of the given object in the feature space.
+        """
         return self._create_transform()(self._weights, features)
 
     def predict(self, features_list: Sequence[Sequence[float]]) -> Sequence[int]:
