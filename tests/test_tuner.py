@@ -58,17 +58,18 @@ class TestModelFinder(unittest.TestCase):
         y: Sequence[int]
 
         x, y = make_moons(
-            n_samples=100,
+            n_samples=10,
             shuffle=True,
             noise=0.1,
             random_state=RandomState(0),
         )
 
         n_seeds: int = 2
-        n_trials: int = 2
+        n_trials: int = 4
+        n_epochs: int = 3
 
         self.model_finder: ModelFinder = ModelFinder(
-            x, y, n_cores=1, n_trials=n_trials, n_seeds=n_seeds
+            0, x, y, n_cores=1, n_trials=n_trials, n_seeds=n_seeds, n_epochs=n_epochs
         )
 
     def test_model_finder_running(self) -> None:
