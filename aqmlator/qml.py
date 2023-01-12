@@ -736,6 +736,35 @@ class QuantumKernelBinaryClassifier(QMLModel):
 
         self._classifier: SVC = SVC()
 
+    @property
+    def n_epochs(self) -> int:
+        """
+        A getter for `n_qubits` property.
+
+        :return:
+            Returns the currently set number of epochs.
+        """
+        return self._n_epochs
+
+    @n_epochs.setter
+    def n_epochs(self, n_epochs: int) -> None:
+        """
+        A setter for `n_epochs` property.
+
+        :param n_epochs:
+            The new number of epochs.
+        """
+        self._n_epochs = n_epochs
+
+    def n_executions(self) -> int:
+        """
+        Returns number of VQC executions so far.
+
+        :return:
+            Returns the number of times the quantum device was called.
+        """
+        return self._dev.num_executions
+
     def _prepare_default_embedding(self) -> None:
         """
         Prepares the default embedding method is `None` was specified or if the
@@ -789,7 +818,9 @@ class QuantumKernelBinaryClassifier(QMLModel):
                 )
                 layer(layer_weights, wires=range(self._n_qubits))
 
-        def transform(weights: Sequence[float], features: Sequence[float]) -> qml.measurements.ExpectationMP:
+        def transform(
+            weights: Sequence[float], features: Sequence[float]
+        ) -> qml.measurements.ExpectationMP:
             ansatz(weights, features)
             return qml.expval(qml.PauliZ(wires=range(self._n_qubits)))
 
@@ -995,8 +1026,9 @@ class QuantumKernelBinaryClassifier(QMLModel):
                     f"Step {i + 1}: "
                     f"Alignment = {current_alignment:.3f} | "
                     f"Step cost value = {cost_val} | "
-                    f"Accuracy {accuracy:.3f}"
+                    f"Validation Accuracy {accuracy:.3f}"
                 )
+                print(self._weights)
 
             if accuracy >= self._accuracy_threshold:
                 break

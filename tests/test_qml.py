@@ -39,10 +39,11 @@ from pennylane.templates import StronglyEntanglingLayers
 
 import torch
 
+
 from typing import Sequence, List, Tuple
 from sklearn.datasets import make_moons
 from numpy.random import RandomState
-from aqmlator.qml import QNNBinaryClassifier
+from aqmlator.qml import QNNBinaryClassifier, QuantumKernelBinaryClassifier
 
 from pennylane import numpy as np
 
@@ -52,7 +53,7 @@ class TestQNN(unittest.TestCase):
     A `TestCase` class for the qnn module.
     """
 
-    def setUp(self):
+    def setUp(self) -> None:
         """
         Sets up the tests.
         """
@@ -106,6 +107,15 @@ class TestQNN(unittest.TestCase):
 
     @staticmethod
     def get_weights(model: torch.nn.Module) -> List[np.ndarray]:
+        """
+        Extract the weights from the given model.
+
+        :param model:
+            The model to extract the weights from.
+
+        :return:
+            The current weights of the model.
+        """
         weights: List[np.ndarray] = []
 
         for name, param in model.named_parameters():
@@ -179,8 +189,7 @@ class TestQNN(unittest.TestCase):
 
     def test_torch_accuracy_increase(self) -> None:
         """
-
-        :return:
+        Tests if the torch accuracy increases after short training.
         """
         model: torch.nn.Sequential = torch.nn.Sequential(
             self.classifier.get_torch_layer()
@@ -310,3 +319,131 @@ class TestQNN(unittest.TestCase):
         )
         model.forward(torch.tensor(self.x))
         self.assertTrue(True, "The torch forward crashed!")
+
+
+class TestQEKBinaryClassifier(unittest.TestCase):
+    def setUp(self) -> None:
+        """
+        Sets up the tests.
+        """
+        seed: int = 42
+        noise: float = 0.5
+        n_samples: int = 15
+        accuracy_threshold: float = 0.85
+
+        self.x: Sequence[Sequence[float]]
+        self.y: Sequence[int]
+
+        self.x, self.y = make_moons(
+            n_samples=n_samples,
+            shuffle=True,
+            noise=noise,
+            random_state=RandomState(seed),
+        )
+
+        for i in range(len(self.y)):
+            if self.y[i] == 0:
+                self.y[i] = -1
+
+        n_qubits: int = 2
+
+        layers: List[Operation] = [
+            StronglyEntanglingLayers
+        ] * 3  # 3 StronglyEntanglingLayers
+        layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
+
+        self.weights_length: int = 18
+
+        alternate_layers: List[Operation] = [
+            pennylane.templates.BasicEntanglerLayers
+        ] * 3
+        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
+
+        self.n_epochs: int = 1
+
+        self.classifier: QuantumKernelBinaryClassifier = QuantumKernelBinaryClassifier(
+            n_qubits=n_qubits,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=accuracy_threshold,
+            layers=layers,
+            layers_weights_shapes=layers_weights_shapes,
+        )
+
+        self.alternate_classifier: QuantumKernelBinaryClassifier = (
+            QuantumKernelBinaryClassifier(
+                n_qubits=n_qubits,
+                n_epochs=self.n_epochs,
+                accuracy_threshold=accuracy_threshold,
+                layers=alternate_layers,
+                layers_weights_shapes=alternate_layers_weights_shapes,
+            )
+        )
+
+    def test_learning_and_predict_run(self) -> None:
+        """
+        Tests if fitting and making predictions is possible.
+        """
+        self.classifier.fit(self.x, self.y)
+        self.assertTrue(True, "The fit crashed!")
+        self.classifier.predict(self.x)
+        self.assertTrue(True, "The prediction crashed!")
+
+    def test_accuracy_increase(self) -> None:
+        """
+        Tests if the accuracy increases after short training.
+        """
+        self.classifier.fit(self.x, self.y)
+        initial_accuracy: float = self.classifier.accuracy(self.x, self.y)
+
+        self.classifier.n_epochs = 10  # Minimal required number in this setup.
+        self.classifier.fit(self.x, self.y)
+        accuracy: float = self.classifier.accuracy(self.x, self.y)
+
+        self.assertTrue(
+            initial_accuracy < accuracy,
+            f"Initial accuracy ({initial_accuracy}) didn't increase ({accuracy}) after training.",
+        )
+
+    def test_weights_change(self) -> None:
+        """
+        Tests if the weights change during the training.
+        """
+        initial_weights: Sequence[float] = self.classifier.weights
+        self.classifier.fit(self.x, self.y)
+
+        self.assertTrue(
+            tuple(initial_weights) != tuple(self.classifier.weights),
+            "Weights didn't change during the training!",
+        )
+
+    def test_results_dimension(self) -> None:
+        """
+        Tests if the predictions have expected dimensions.
+        """
+        self.classifier.fit(self.x, self.y)
+        predictions: np.ndarray = self.classifier.predict(self.x)
+        self.assertTrue(
+            predictions.shape == (len(self.x),),
+            "QuantumKernelBinaryClassifier predictions have unexpected shape.",
+        )
+
+    def test_executions_number_growth(self) -> None:
+        """
+        Tests if the number of executions grows when the model is executed.
+        """
+        self.classifier.fit(self.x, self.y)
+        self.classifier.predict(self.x)
+        self.assertTrue(
+            self.classifier.n_executions() > 0, "The number of executions don't grow!"
+        )
+
+    def test_different_layers_learning_and_predict_run(
+        self,
+    ) -> None:
+        """
+        Tests if making predictions is possible when different type of layers is used.
+        """
+        self.alternate_classifier.fit(self.x, self.y)
+        self.assertTrue(True, "The learning crashed!")
+        self.alternate_classifier.predict(self.x)
+        self.assertTrue(True, "The predicting crashed!")
