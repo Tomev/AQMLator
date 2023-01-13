@@ -1,0 +1,11 @@
+requests
+scikit-learn
+dill
+pennylane
+--find-links https://download.pytorch.org/whl/cu116
+torch
+torchvision
+torchaudio
+matplotlib
+optuna
+
