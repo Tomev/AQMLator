@@ -40,6 +40,7 @@ from pennylane.kernels import target_alignment
 from typing import Sequence, Callable, Optional, Dict, Any, Tuple, List
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
+from sklearn.base import ClassifierMixin
 from itertools import chain
 from math import prod
 import abc
@@ -100,7 +101,7 @@ class QMLModel(MLModel, abc.ABC):
         return self._dev.num_executions
 
 
-class QNNBinaryClassifier(QMLModel):
+class QNNBinaryClassifier(QMLModel, ClassifierMixin):
     """
     This class implements a binary classifier that uses Quantum Neural Networks.
 
@@ -379,10 +380,7 @@ class QNNBinaryClassifier(QMLModel):
 
             self.weights, cost = self.optimizer.step_and_cost(batch_cost, self.weights)
 
-            # Compute accuracy on train and validation set
-            accuracy_train = self.score(
-                train_features[batch_indices], train_classes[batch_indices]
-            )
+            # Compute accuracy on the validation set
             accuracy_validation = self.score(validation_features, validation_classes)
 
             # Make decision about stopping the training basing on the validation score
@@ -393,7 +391,6 @@ class QNNBinaryClassifier(QMLModel):
             if self._debug_flag:
                 print(
                     f"It: {it + 1} / {self._n_epochs * n_batches} | Cost: {cost} |"
-                    f" Accuracy (train): {accuracy_train} |"
                     f" Accuracy (validation): {accuracy_validation}"
                 )
 
@@ -438,37 +435,6 @@ class QNNBinaryClassifier(QMLModel):
             the returned object is `np.ndarray` with `dtype=bool`.
         """
         return self.get_circuit_expectation_values(features_lists) >= 0.0
-
-    def score(
-        self,
-        features_lists: Sequence[Sequence[float]],
-        classes: Sequence[int],
-        weights: Optional[Sequence[float]] = None,
-    ) -> float:
-        """
-        Computes and returns the mean score of the classifier.
-
-        :param features_lists:
-            Features of the objects of interest.
-        :param classes:
-            The true target classes of given objects.
-        :param weights:
-            Weights that will be applied to the quantum circuit.
-
-        :return:
-            The mean score of the classifier.
-        """
-        if weights is not None:
-            self.weights = weights
-
-        score: float = 0
-
-        predictions: np.ndarray = self.predict(features_lists)
-
-        for i in range(len(features_lists)):
-            score += int(predictions[i] == classes[i])  # Implicit conversion to int.
-
-        return score / len(features_lists)
 
     def get_torch_layer(self) -> torch.nn.Module:
         """
@@ -525,7 +491,7 @@ class QNNBinaryClassifier(QMLModel):
         return qml.qnn.TorchLayer(circuit, weight_shapes)
 
 
-class QuantumKernelBinaryClassifier(QMLModel):
+class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
     """
     This class implements the binary classifier based on quantum kernels.
     """
@@ -894,7 +860,7 @@ class QuantumKernelBinaryClassifier(QMLModel):
                 features_lists, classes
             )
 
-            accuracy: float = self.accuracy(validation_features, validation_classes)
+            accuracy: float = self.score(validation_features, validation_classes)
 
             if self._debug_flag:
                 print(
@@ -947,21 +913,3 @@ class QuantumKernelBinaryClassifier(QMLModel):
             the returned object is `np.ndarray` with `dtype=bool`.
         """
         return self._classifier.predict(features_lists)
-
-    def accuracy(
-        self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
-    ) -> float:
-        """
-        Computes the accuracy of current classifier, given the objects and their
-        classes to check.
-
-        :param features_lists:
-            The features of the object to classify.
-        :param classes:
-            The classes of the given objects.
-        :return:
-            Tha accuracy of current classifier.
-        """
-        predicted_classes: Sequence[int] = self.predict(features_lists)
-        # A hax is used here, where we sum the arrays of bools.
-        return sum(np.array(predicted_classes) == np.array(classes)) / len(classes)

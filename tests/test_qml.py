@@ -400,11 +400,11 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         Tests if the accuracy increases after short training.
         """
         self.classifier.fit(self.x, self.y)
-        initial_accuracy: float = self.classifier.accuracy(self.x, self.y)
+        initial_accuracy: float = self.classifier.score(self.x, self.y)
 
         self.classifier.n_epochs = 2  # Minimal required number in this setup.
         self.classifier.fit(self.x, self.y)
-        accuracy: float = self.classifier.accuracy(self.x, self.y)
+        accuracy: float = self.classifier.score(self.x, self.y)
 
         self.assertTrue(
             initial_accuracy < accuracy,
