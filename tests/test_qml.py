@@ -40,8 +40,7 @@ from pennylane.measurements import ExpectationMP
 
 import torch
 
-
-from typing import Sequence, List, Tuple
+from typing import Sequence, List, Tuple, Type
 from sklearn.datasets import make_moons
 from numpy.random import RandomState
 from aqmlator.qml import QNNBinaryClassifier, QuantumKernelBinaryClassifier
@@ -77,12 +76,12 @@ class TestQNN(unittest.TestCase):
 
         n_qubits: int = 2
 
-        layers: List[Operation] = [
+        layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
         layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
 
-        alternate_layers: List[Operation] = [
+        alternate_layers: List[Type[Operation]] = [
             pennylane.templates.BasicEntanglerLayers
         ] * 2
         alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
@@ -352,14 +351,14 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.n_qubits: int = 2
 
-        layers: List[Operation] = [
+        layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
         layers_weights_shapes: List[Tuple[int, ...]] = [(1, self.n_qubits, 3)] * 3
 
         self.weights_length: int = 18
 
-        alternate_layers: List[Operation] = [
+        alternate_layers: List[Type[Operation]] = [
             pennylane.templates.BasicEntanglerLayers
         ] * 3
         alternate_layers_weights_shapes: List[Tuple[int, ...]] = [
@@ -408,7 +407,8 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.assertTrue(
             initial_accuracy < accuracy,
-            f"Initial accuracy ({initial_accuracy}) didn't increase ({accuracy}) after training.",
+            f"Initial accuracy ({initial_accuracy}) didn't increase ({accuracy}) after "
+            f"training.",
         )
 
     def test_weights_change(self) -> None:
@@ -478,5 +478,6 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         for x in mapped_x:
             self.assertTrue(
                 len(np.array(x)) == self.n_qubits,
-                f"Dimension of the results is incorrect! ({len(np.array(x))} != {self.n_qubits})",
+                f"Dimension of the results is incorrect! ({len(np.array(x))} !="
+                f" {self.n_qubits})",
             )

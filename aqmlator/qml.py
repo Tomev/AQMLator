@@ -37,7 +37,7 @@ from pennylane.templates.layers import StronglyEntanglingLayers
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
 from pennylane.kernels import target_alignment
-from typing import Sequence, Callable, Optional, Dict, Any, Tuple, List
+from typing import Sequence, Callable, Optional, Dict, Any, Tuple, List, Type
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
 from sklearn.base import ClassifierMixin
@@ -115,9 +115,9 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
         n_epochs: int = 1,
         device_string: str = "lightning.qubit",
         optimizer: Optional[GradientDescentOptimizer] = None,
-        embedding_method: Optional[qml.operation.Operation] = None,
+        embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
-        layers: Optional[Sequence[qml.operation.Operation]] = None,
+        layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
         layers_weights_shapes: Optional[Sequence[Tuple[int, ...]]] = None,
         accuracy_threshold: float = 0.8,
         initial_weights: Optional[Sequence[float]] = None,
@@ -130,8 +130,6 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
 
         :param n_qubits:
             The number of qubits (and wires) used in the classification.
-        :param n_layers:
-            The number of layers in the VQC.
         :param batch_size:
             Size of a batches used during the training.
         :param n_epochs:
@@ -176,7 +174,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
         self._accuracy_threshold: float = accuracy_threshold
         self._validation_set_size: float = validation_set_size
 
-        self._layers: Sequence[qml.operation.Operation]
+        self._layers: Sequence[Type[qml.operation.Operation]]
         self._layers_weights_shapes: Sequence[Tuple[int, ...]]
 
         if layers is None or layers_weights_shapes is None:
@@ -201,7 +199,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
 
         self.weights = initial_weights
 
-        self._embedding_method: qml.operation.Operation
+        self._embedding_method: Type[qml.operation.Operation]
         self._embedding_kwargs: Dict[str, Any]
 
         if embedding_method is None or embedding_kwargs is None:
@@ -503,9 +501,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         kta_subset_size: int = 5,
         device_string: str = "lightning.qubit",
         optimizer: Optional[GradientDescentOptimizer] = None,
-        embedding_method: Optional[qml.operation.Operation] = None,
+        embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
-        layers: Optional[Sequence[qml.operation.Operation]] = None,
+        layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
         layers_weights_shapes: Optional[Sequence[Tuple[int, ...]]] = None,
         initial_weights: Optional[Sequence[float]] = None,
         rng_seed: int = 42,
@@ -562,7 +560,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         self._accuracy_threshold = accuracy_threshold
         self._validation_set_size = validation_set_size
 
-        self._layers: Sequence[qml.operation.Operation]
+        self._layers: Sequence[Type[qml.operation.Operation]]
         self._layers_weights_shapes: Sequence[Tuple[int, ...]]
 
         if layers is None or layers_weights_shapes is None:
@@ -573,7 +571,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             self._layers = layers
             self._layers_weights_shapes = layers_weights_shapes
 
-        self._embedding_method: qml.operation.Operation
+        self._embedding_method: Type[qml.operation.Operation]
         self._embedding_kwargs: Dict[str, Any]
 
         if embedding_method is None or embedding_kwargs is None:
@@ -685,7 +683,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             self._ansatz(weights, features)
 
             # TODO TR: Is this a good measurement to return?
-            return [qml.expval(qml.PauliZ(i)) for i in range(self.n_qubits)]
+            return [qml.expval(qml.PauliZ((i,))) for i in range(self.n_qubits)]
 
         return transform
 
@@ -766,7 +764,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :param features_lists:
             The lists of features of the objects that are used during the training.
         :param classes:
-            A list of classes corresponding to the given lists of features.
+            A list of classes corresponding to the given lists of features. The classes
+            should be from set {-1, 1}.
 
         :return:
             Returns `self` after training.
@@ -851,8 +850,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
                     The `kernel_matrix` function that uses the trained kernel.
                 """
                 return qml.kernels.kernel_matrix(
-                    features_lists,
-                    classes,
+                    list(features_lists),
+                    list(classes),
                     lambda x1, x2: kernel(self.weights, x1, x2),
                 )
 

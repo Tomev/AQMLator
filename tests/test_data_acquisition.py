@@ -4,8 +4,9 @@
 
 __author__ = "Tomasz Rybotycki"
 
-
-import unittest, csv, os
+import unittest
+import csv
+import os
 
 from typing import Tuple, Union, List
 
@@ -64,7 +65,7 @@ class TestDataAcquisition(unittest.TestCase):
         """
         try:
             os.remove(file_path)
-        except Exception:
+        except FileNotFoundError:
             pass
 
     def test_learning_datum_equality(self) -> None:

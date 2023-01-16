@@ -205,7 +205,7 @@ class ModelFinder:
         kwargs["accuracy_threshold"] = self._minimal_accuracy
         kwargs["rng_seed"] = 0
 
-        layers: List[pennylane.operation.Operation] = []
+        layers: List[Type[pennylane.operation.Operation]] = []
         layers_weights_shapes: List[Tuple[int, ...]] = []
 
         for i in range(kwargs["n_layers"]):
@@ -247,9 +247,7 @@ class ModelFinder:
             A dictionary with fields required for proper `QNNBinaryClassifier`
             construction.
         """
-        kwargs: Dict[str, Any] = {}
-
-        kwargs["n_qubits"] = len(self._x[0])
+        kwargs: Dict[str, Any] = {"n_qubits": len(self._x[0])}
 
         embedding_index: int = trial.suggest_int(
             "embedding", 0, len(self._embeddings) - 1
@@ -257,8 +255,7 @@ class ModelFinder:
 
         kwargs["embedding_method"] = self._embeddings[embedding_index]
 
-        embedding_kwargs: Dict[str, Any] = {}
-        embedding_kwargs["wires"] = range(kwargs["n_qubits"])
+        embedding_kwargs: Dict[str, Any] = {"wires": range(kwargs["n_qubits"])}
 
         if embedding_index == DataEmbedding.AMPLITUDE:
             embedding_kwargs["pad_with"] = 0
@@ -284,10 +281,10 @@ class ModelFinder:
             A dictionary with fields required for proper
             `QuantumKernelBinaryClassifier` construction.
         """
-        kwargs: Dict[str, Any] = {}
-
-        kwargs["n_qubits"] = len(self._x[0])
-        kwargs["n_layers"] = trial.suggest_int("n_layers", 3, 5)
+        kwargs: Dict[str, Any] = {
+            "n_qubits": len(self._x[0]),
+            "n_layers": trial.suggest_int("n_layers", 3, 5),
+        }
 
         return kwargs
 
