@@ -203,7 +203,7 @@ class ModelFinder:
 
         kwargs["n_epochs"] = self._n_epochs
         kwargs["accuracy_threshold"] = self._minimal_accuracy
-        kwargs["weights_random_seed"] = 0
+        kwargs["rng_seed"] = 0
 
         layers: List[pennylane.operation.Operation] = []
         layers_weights_shapes: List[Tuple[int, ...]] = []
@@ -224,7 +224,7 @@ class ModelFinder:
 
         for seed in range(self._n_seeds):
 
-            kwargs["weights_random_seed"] = seed
+            kwargs["rng_seed"] = seed
 
             classifier: QMLModel = self._binary_classifiers[classifier_type](**kwargs)
 

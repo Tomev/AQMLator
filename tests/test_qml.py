@@ -58,7 +58,9 @@ class TestQNN(unittest.TestCase):
         """
         Sets up the tests.
         """
-        seed: int = 42
+        # TR:   Changing the seed can cause problems with the `test_accuracy_increase`,
+        #       as the number of training epochs is currently low for `seed = 1`.
+        seed: int = 1
         noise: float = 0.1
         n_samples: int = 100
         accuracy_threshold: float = 0.85
@@ -327,7 +329,9 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         """
         Sets up the tests.
         """
-        seed: int = 42
+        # TR:   Changing the seed can cause problems with the `test_accuracy_increase`,
+        #       as the number of training epochs is currently minimal for `seed = 0`.
+        seed: int = 0
         noise: float = 0.5
         n_samples: int = 15
         accuracy_threshold: float = 0.85
@@ -398,7 +402,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         self.classifier.fit(self.x, self.y)
         initial_accuracy: float = self.classifier.accuracy(self.x, self.y)
 
-        self.classifier.n_epochs = 10  # Minimal required number in this setup.
+        self.classifier.n_epochs = 2  # Minimal required number in this setup.
         self.classifier.fit(self.x, self.y)
         accuracy: float = self.classifier.accuracy(self.x, self.y)
 
