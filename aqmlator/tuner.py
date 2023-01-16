@@ -213,10 +213,10 @@ class ModelFinder:
             layers.append(self._layers[layer_index])
 
             if layer_index == Layers.BASIC:
-                layers_weights_shapes.append((1, kwargs["n_qubits"]))
+                layers_weights_shapes.append((1, kwargs["wires"]))
 
             if layer_index == Layers.STRONGLY_ENTANGLING:
-                layers_weights_shapes.append((1, kwargs["n_qubits"], 3))
+                layers_weights_shapes.append((1, kwargs["wires"], 3))
 
         kwargs["layers"] = layers
         kwargs["layers_weights_shapes"] = layers_weights_shapes
@@ -247,7 +247,7 @@ class ModelFinder:
             A dictionary with fields required for proper `QNNBinaryClassifier`
             construction.
         """
-        kwargs: Dict[str, Any] = {"n_qubits": len(self._x[0])}
+        kwargs: Dict[str, Any] = {"wires": len(self._x[0])}
 
         embedding_index: int = trial.suggest_int(
             "embedding", 0, len(self._embeddings) - 1
@@ -255,7 +255,7 @@ class ModelFinder:
 
         kwargs["embedding_method"] = self._embeddings[embedding_index]
 
-        embedding_kwargs: Dict[str, Any] = {"wires": range(kwargs["n_qubits"])}
+        embedding_kwargs: Dict[str, Any] = {"wires": range(kwargs["wires"])}
 
         if embedding_index == DataEmbedding.AMPLITUDE:
             embedding_kwargs["pad_with"] = 0
@@ -282,7 +282,7 @@ class ModelFinder:
             `QuantumKernelBinaryClassifier` construction.
         """
         kwargs: Dict[str, Any] = {
-            "n_qubits": len(self._x[0]),
+            "wires": len(self._x[0]),
             "n_layers": trial.suggest_int("n_layers", 3, 5),
         }
 

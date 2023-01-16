@@ -37,7 +37,7 @@ from pennylane.templates.layers import StronglyEntanglingLayers
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
 from pennylane.kernels import target_alignment
-from typing import Sequence, Callable, Optional, Dict, Any, Tuple, List, Type
+from typing import Sequence, Callable, Optional, Dict, Any, Tuple, List, Type, Union
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
 from sklearn.base import ClassifierMixin
@@ -61,6 +61,10 @@ class MLModel(abc.ABC):
         :param optimizer:
             An optimizer that will be used during the training.
         """
+
+        if optimizer is None:
+            optimizer = NesterovMomentumOptimizer()
+
         self.optimizer: GradientDescentOptimizer = optimizer
         self.weights: Sequence[float]
 
@@ -87,8 +91,20 @@ class QMLModel(MLModel, abc.ABC):
     A boilerplate class, providing an interface for future QML models.
     """
 
-    def __init__(self, optimizer: Optional[GradientDescentOptimizer] = None):
+    def __init__(
+        self,
+        wires: Union[int, Sequence[int]],
+        optimizer: Optional[GradientDescentOptimizer] = None,
+    ):
         self._dev: qml.Device
+
+        self.wires: Sequence[int]
+
+        if isinstance(wires, int):
+            self.wires = list(range(wires))
+        else:
+            self.wires = wires
+
         super().__init__(optimizer)
 
     def n_executions(self) -> int:
@@ -110,7 +126,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
 
     def __init__(
         self,
-        n_qubits: int,
+        wires: Union[int, Sequence[int]],
         batch_size: int,
         n_epochs: int = 1,
         device_string: str = "lightning.qubit",
@@ -128,8 +144,9 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
         """
         The constructor for the `QNNBinaryClassifier` class.
 
-        :param n_qubits:
-            The number of qubits (and wires) used in the classification.
+        :param wires:
+            The wires to use in the VQC or the number of qubits (and wires) used in the
+            VQC.
         :param batch_size:
             Size of a batches used during the training.
         :param n_epochs:
@@ -165,7 +182,8 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
             A flag informing the classifier if the training info should be printed
             to the console or not.
         """
-        self.n_qubits: int = n_qubits
+        super().__init__(wires, optimizer)
+
         self._n_epochs: int = n_epochs
         self._batch_size: int = batch_size
         self._dev_str: str = device_string
@@ -208,12 +226,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
             self._embedding_method = embedding_method
             self._embedding_kwargs = embedding_kwargs
 
-        if optimizer is None:
-            optimizer = NesterovMomentumOptimizer()
-
-        super().__init__(optimizer)
-
-        self._dev = qml.device(device_string, wires=self.n_qubits)
+        self._dev = qml.device(device_string, wires=self.wires)
 
         self._circuit: Callable[
             [Sequence[float], Sequence[float]], float
@@ -228,7 +241,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
         """
         self._embedding_method = AmplitudeEmbedding
         self._embedding_kwargs = {
-            "wires": range(self.n_qubits),
+            "wires": self.wires,
             "pad_with": 0,
             "normalize": True,
         }
@@ -240,7 +253,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
         use a single strongly entangling layer.
         """
         self._layers = [StronglyEntanglingLayers]
-        self._layers_weights_shapes = [(1, self.n_qubits, 3)]
+        self._layers_weights_shapes = [(1, len(self.wires), 3)]
 
     def _create_circuit(self) -> Callable[[Sequence[float], Sequence[float]], float]:
         @qml.qnode(self._dev)
@@ -275,8 +288,8 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
                 layer_weights = np.array(layer_weights).reshape(
                     self._layers_weights_shapes[i]
                 )
-                layer(layer_weights, wires=range(self.n_qubits))
-            return qml.expval(qml.PauliZ((0,)))
+                layer(layer_weights, wires=self.wires)
+            return qml.expval(qml.PauliZ((self.wires[0],)))
 
         return circuit
 
@@ -338,11 +351,6 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
             random_state=self._rng_seed,
         )
 
-        # Change classes to [-1, 1]. See the method description for the reasoning.
-        cost_classes: np.ndarray = np.array(train_classes)
-        cost_classes[cost_classes == max(cost_classes)] = 1
-        cost_classes[cost_classes == min(cost_classes)] = -1
-
         n_batches: int = max(1, len(features_lists) // self._batch_size)
 
         feature_batches = np.array_split(np.arange(len(train_features)), n_batches)
@@ -368,7 +376,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
             return self._cost(
                 weights,
                 train_features[batch_indices],
-                cost_classes[batch_indices],
+                train_classes[batch_indices],
             )
 
         for it, batch_indices in enumerate(
@@ -432,7 +440,10 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
             The results - classes 0 or 1 - of the classification. The data structure of
             the returned object is `np.ndarray` with `dtype=bool`.
         """
-        return self.get_circuit_expectation_values(features_lists) >= 0.0
+        expectation_values: Sequence[float] = self.get_circuit_expectation_values(
+            features_lists
+        )
+        return [2 * int(val >= 0.0) - 1 for val in expectation_values]
 
     def get_torch_layer(self) -> torch.nn.Module:
         """
@@ -465,7 +476,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
                 the classification result and its confidence.
             """
 
-            padding: torch.Tensor = torch.zeros([2**self.n_qubits - len(inputs)])
+            padding: torch.Tensor = torch.zeros([2 ** len(self.wires) - len(inputs)])
             inputs = torch.cat((inputs, padding))
 
             # TODO TR:  This is exactly how it's called, eg.
@@ -481,7 +492,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
                 ]
                 start_weights += prod(self._layers_weights_shapes[i])
                 layer_weights = layer_weights.reshape(self._layers_weights_shapes[i])
-                layer(layer_weights, wires=range(self.n_qubits))
+                layer(layer_weights, wires=self.wires)
 
             return qml.expval(qml.PauliZ((0,)))
 
@@ -496,7 +507,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
     def __init__(
         self,
-        n_qubits: int,
+        wires: Union[int, Sequence[int]],
         n_epochs: int = 10,
         kta_subset_size: int = 5,
         device_string: str = "lightning.qubit",
@@ -514,8 +525,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         """
         A constructor for the `QuantumKernelBinaryClassifier` class.
 
-        :param n_qubits:
-            The number of qubits in the kernel VQC.
+        :param wires:
+            The wires to use in the VQC or the number of qubits (and wires) used in the
+            VQC.
         :param n_epochs:
             The maximal number of training iterations.
         :param kta_subset_size:
@@ -550,9 +562,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             A flag informing the classifier if the training info should be printed
             to the console or not.
         """
-        self._dev: qml.Device = qml.device(device_string, wires=n_qubits)
+        super().__init__(wires, optimizer)
 
-        self.n_qubits: int = n_qubits
         self.n_epochs: int = n_epochs
 
         self._kta_subset_size: int = kta_subset_size
@@ -595,12 +606,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         self.weights = np.array(initial_weights, requires_grad=True)
 
-        if optimizer is None:
-            optimizer = NesterovMomentumOptimizer()
-
         self._debug_flag: bool = debug_flag
 
-        super().__init__(optimizer)
+        self._dev: qml.Device = qml.device(device_string, wires=wires)
 
         self._classifier: SVC = SVC()
 
@@ -615,7 +623,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             `AmplitudeEmbedding`.
         """
         self._embedding_method = AngleEmbedding
-        self._embedding_kwargs = {"wires": range(self.n_qubits)}
+        self._embedding_kwargs = {"wires": self.wires}
 
     def _prepare_default_layers(self) -> None:
         """
@@ -624,7 +632,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         use a triple strongly entangling layer.
         """
         self._layers = [StronglyEntanglingLayers] * 3
-        self._layers_weights_shapes = [(1, self.n_qubits, 3)] * 3
+        self._layers_weights_shapes = [(1, len(self.wires), 3)] * 3
 
     def _ansatz(self, weights: Sequence[float], features: Sequence[float]) -> None:
         """
@@ -651,7 +659,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             layer_weights = np.array(layer_weights).reshape(
                 self._layers_weights_shapes[i]
             )
-            layer(layer_weights, wires=range(self.n_qubits))
+            layer(layer_weights, wires=self.wires)
 
     def _create_transform(
         self,
@@ -683,7 +691,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             self._ansatz(weights, features)
 
             # TODO TR: Is this a good measurement to return?
-            return [qml.expval(qml.PauliZ((i,))) for i in range(self.n_qubits)]
+            return [qml.expval(qml.PauliZ((i,))) for i in self.wires]
 
         return transform
 
@@ -725,7 +733,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             """
             self._ansatz(weights, first_features)
             adjoint_ansatz(weights, second_features)
-            return qml.probs(wires=range(self.n_qubits))
+            return qml.probs(wires=self.wires)
 
         def kernel(
             weights: Sequence[float],

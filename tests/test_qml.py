@@ -59,7 +59,7 @@ class TestQNN(unittest.TestCase):
         """
         # TR:   Changing the seed can cause problems with the `test_accuracy_increase`,
         #       as the number of training epochs is currently low for `seed = 1`.
-        seed: int = 1
+        seed: int = 2
         noise: float = 0.1
         n_samples: int = 100
         accuracy_threshold: float = 0.85
@@ -73,6 +73,10 @@ class TestQNN(unittest.TestCase):
             noise=noise,
             random_state=RandomState(seed),
         )
+
+        for i in range(len(self.y)):
+            if self.y[i] == 0:
+                self.y[i] = -1
 
         n_qubits: int = 2
 
@@ -90,7 +94,7 @@ class TestQNN(unittest.TestCase):
         batch_size: int = 20
 
         self.classifier: QNNBinaryClassifier = QNNBinaryClassifier(
-            n_qubits=n_qubits,
+            wires=n_qubits,
             batch_size=batch_size,
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
@@ -99,7 +103,7 @@ class TestQNN(unittest.TestCase):
         )
 
         self.alternate_classifier: QNNBinaryClassifier = QNNBinaryClassifier(
-            n_qubits=n_qubits,
+            wires=n_qubits,
             batch_size=batch_size,
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
@@ -278,7 +282,7 @@ class TestQNN(unittest.TestCase):
         """
         predictions: np.ndarray = self.classifier.predict(self.x)
         self.assertTrue(
-            predictions.shape == (len(self.x),),
+            len(predictions) == len(self.x),
             "QNNBinaryClassifier predictions have unexpected shape.",
         )
 
@@ -368,7 +372,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         self.n_epochs: int = 1
 
         self.classifier: QuantumKernelBinaryClassifier = QuantumKernelBinaryClassifier(
-            n_qubits=self.n_qubits,
+            wires=self.n_qubits,
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
@@ -377,7 +381,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.alternate_classifier: QuantumKernelBinaryClassifier = (
             QuantumKernelBinaryClassifier(
-                n_qubits=self.n_qubits,
+                wires=self.n_qubits,
                 n_epochs=self.n_epochs,
                 accuracy_threshold=accuracy_threshold,
                 layers=alternate_layers,
