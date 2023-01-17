@@ -31,6 +31,7 @@
 
 __author__ = "Tomasz Rybotycki"
 
+import abc
 import uuid
 import optuna
 import pennylane
@@ -76,7 +77,58 @@ class Optimizers(IntEnum):
     ADAM: int = 1
 
 
-class ModelFinder:
+class OptunaOptimizer(abc.ABC):
+    """
+    A class for all `optuna`-based optimizers that takes care of the common boilerplate
+    code, especially in the constructor.
+    """
+
+    def __init__(
+        self,
+        features: Sequence[Sequence[float]],
+        classes: Sequence[int],
+        study_name: str = "",
+        add_uuid: bool = True,
+        n_trials: int = 10,
+        n_cores: int = 1,
+        n_seeds: int = 1,
+    ) -> None:
+        """
+        A constructor for the `OptunaOptimizer` class.
+
+        :param features:
+            The lists of features of the objects that are used during the training.
+        :param classes:
+            A list of classes or function values corresponding to the given lists of
+            features.
+        :param study_name:
+            The name of the `optuna` study. If the study with this name is already
+            stored in the DB, the tuner will continue the study.
+        :param add_uuid:
+            Flag for specifying if uuid should be added to the `study_name`.
+        :param n_cores:
+            The number of cores that `optuna` can use. The (default) value :math:`-1`
+            means all of them.
+        :param n_trials:
+            The number of trials after which the search will be finished.
+        :param n_seeds:
+            Number of seeds checked per `optuna` trial.
+        """
+        self._x: Sequence[Sequence[float]] = features
+        self._y: Sequence[int] = classes
+
+        self._study_name: str = study_name
+
+        if add_uuid:
+            self._study_name += str(uuid.uuid1())
+
+        self._n_trials: int = n_trials
+        self._n_cores: int = n_cores
+        self._n_seeds: int = n_seeds
+        pass
+
+
+class ModelFinder(OptunaOptimizer):
     """
     A class for finding the best QNN model for given data and task.
     """
@@ -121,21 +173,16 @@ class ModelFinder:
         :param n_seeds:
             Number of seeds checked per `optuna` trial.
         """
+        super().__init__(
+            features, classes, study_name, add_uuid, n_trials, n_cores, n_seeds
+        )
+
         self._task_type: int = task_type
-        self._n_trials: int = n_trials
-        self._n_cores: int = n_cores
+
         self._n_epochs: int = n_epochs
-        self._n_seeds: int = n_seeds
+
         self._batch_size: int = batch_size
         self._minimal_accuracy: float = minimal_accuracy
-
-        self._x: Sequence[Sequence[float]] = features
-        self._y: Sequence[int] = classes
-
-        self._study_name: str = study_name
-
-        if add_uuid:
-            self._study_name += str(uuid.uuid1())
 
         self._binary_classifiers: List[Type[QMLModel]] = [
             QNNBinaryClassifier,
@@ -203,28 +250,13 @@ class ModelFinder:
 
         kwargs["n_epochs"] = self._n_epochs
         kwargs["accuracy_threshold"] = self._minimal_accuracy
-        kwargs["weights_random_seed"] = 0
+        kwargs["rng_seed"] = 0
 
-        layers: List[pennylane.operation.Operation] = []
-        layers_weights_shapes: List[Tuple[int, ...]] = []
-
-        for i in range(kwargs["n_layers"]):
-            layer_index: int = trial.suggest_int(f"layer_{i}", 0, len(self._layers) - 1)
-            layers.append(self._layers[layer_index])
-
-            if layer_index == Layers.BASIC:
-                layers_weights_shapes.append((1, kwargs["n_qubits"]))
-
-            if layer_index == Layers.STRONGLY_ENTANGLING:
-                layers_weights_shapes.append((1, kwargs["n_qubits"], 3))
-
-        kwargs["layers"] = layers
-        kwargs["layers_weights_shapes"] = layers_weights_shapes
-        kwargs.pop("n_layers")
+        self._suggest_layers(trial, kwargs)
 
         for seed in range(self._n_seeds):
 
-            kwargs["weights_random_seed"] = seed
+            kwargs["rng_seed"] = seed
 
             classifier: QMLModel = self._binary_classifiers[classifier_type](**kwargs)
 
@@ -233,6 +265,36 @@ class ModelFinder:
             quantum_device_calls += classifier.n_executions()
 
         return quantum_device_calls / self._n_seeds
+
+    def _suggest_layers(
+        self, trial: optuna.trial.Trial, kwargs: Dict[str, Any]
+    ) -> None:
+        """
+        Using `optuna`, suggest the order of layers in the VQC based on the `kwargs`
+        given.
+
+        :param trial:
+            Optuna `Trial` object that "suggests" the parameters values.
+        :param kwargs:
+            A dictionary of keyword arguments that will be used to initialize the
+            QML model.
+        """
+        layers: List[Type[pennylane.operation.Operation]] = []
+        layers_weights_shapes: List[Tuple[int, ...]] = []
+
+        for i in range(kwargs["n_layers"]):
+            layer_index: int = trial.suggest_int(f"layer_{i}", 0, len(self._layers) - 1)
+            layers.append(self._layers[layer_index])
+
+            if layer_index == Layers.BASIC:
+                layers_weights_shapes.append((1, kwargs["wires"]))
+
+            if layer_index == Layers.STRONGLY_ENTANGLING:
+                layers_weights_shapes.append((1, kwargs["wires"], 3))
+
+        kwargs["layers"] = layers
+        kwargs["layers_weights_shapes"] = layers_weights_shapes
+        kwargs.pop("n_layers")
 
     def _get_qnn_binary_classifier_kwargs(
         self, trial: optuna.trial.Trial
@@ -247,9 +309,7 @@ class ModelFinder:
             A dictionary with fields required for proper `QNNBinaryClassifier`
             construction.
         """
-        kwargs: Dict[str, Any] = {}
-
-        kwargs["n_qubits"] = len(self._x[0])
+        kwargs: Dict[str, Any] = {"wires": len(self._x[0])}
 
         embedding_index: int = trial.suggest_int(
             "embedding", 0, len(self._embeddings) - 1
@@ -257,8 +317,7 @@ class ModelFinder:
 
         kwargs["embedding_method"] = self._embeddings[embedding_index]
 
-        embedding_kwargs: Dict[str, Any] = {}
-        embedding_kwargs["wires"] = range(kwargs["n_qubits"])
+        embedding_kwargs: Dict[str, Any] = {"wires": range(kwargs["wires"])}
 
         if embedding_index == DataEmbedding.AMPLITUDE:
             embedding_kwargs["pad_with"] = 0
@@ -284,15 +343,15 @@ class ModelFinder:
             A dictionary with fields required for proper
             `QuantumKernelBinaryClassifier` construction.
         """
-        kwargs: Dict[str, Any] = {}
-
-        kwargs["n_qubits"] = len(self._x[0])
-        kwargs["n_layers"] = trial.suggest_int("n_layers", 3, 5)
+        kwargs: Dict[str, Any] = {
+            "wires": len(self._x[0]),
+            "n_layers": trial.suggest_int("n_layers", 3, 5),
+        }
 
         return kwargs
 
 
-class HyperparameterTuner:
+class HyperparameterTuner(OptunaOptimizer):
     """
     This class contains the optuna-based tuner for ML Training hyperparameters.
     """
@@ -330,17 +389,9 @@ class HyperparameterTuner:
         :param n_seeds:
             Number of seeds checked per `optuna` trial.
         """
-        self._n_cores: int = n_cores
-        self._n_trials: int = n_trials
-        self._n_seeds: int = n_seeds
-
-        self._x: Sequence[Sequence[float]] = features
-        self._y: Sequence[int] = classes
-
-        self._study_name: str = study_name
-
-        if add_uuid:
-            self._study_name += str(uuid.uuid1())
+        super().__init__(
+            features, classes, study_name, add_uuid, n_trials, n_cores, n_seeds
+        )
 
         self._optimizers: List[Callable[[Any], GradientDescentOptimizer]] = [
             AdamOptimizer,
@@ -365,6 +416,39 @@ class HyperparameterTuner:
             self._optuna_objective, n_trials=self._n_trials, n_jobs=self._n_cores
         )
 
+    def _suggest_optimizer(self, trial: optuna.trial.Trial) -> GradientDescentOptimizer:
+        """
+
+        :param trial:
+            The `optuna.trial.Trial` object used to randomize and store the results of
+            the optimization.
+        :return:
+            The suggested optimizer.
+        """
+        optimizer_index: int = trial.suggest_int(
+            "optimizer", 0, len(self._optimizers) - 1
+        )
+
+        optimizer: GradientDescentOptimizer
+
+        if optimizer_index == Optimizers.ADAM:
+            # Hyperparameters range taken from arXiv:1412.6980.
+            optimizer = AdamOptimizer(
+                stepsize=trial.suggest_float("stepsize", 0.00001, 0.1),
+                beta1=trial.suggest_float("beta1", 0, 0.9),
+                beta2=trial.suggest_float("beta2", 0.99, 0.9999),
+            )
+
+        if optimizer_index == Optimizers.NESTEROV:
+            # Hyperparameters range taken from
+            # https://cs231n.github.io/neural-networks-3/
+            optimizer = NesterovMomentumOptimizer(
+                stepsize=trial.suggest_float("stepsize", 0.00001, 0.1),
+                momentum=trial.suggest_float("momentum", 0.5, 0.9),
+            )
+
+        return optimizer
+
     def _optuna_objective(self, trial: optuna.trial.Trial) -> float:
         """
         Objective function of the `optuna` optimizer.
@@ -374,32 +458,7 @@ class HyperparameterTuner:
             optimization.
         :return:
         """
-        optimizer_index: int = trial.suggest_int(
-            "optimizer", 0, len(self._optimizers) - 1
-        )
-
-        optimizer: GradientDescentOptimizer
-        optimizer_kwargs: Dict[str, Any]
-
-        if optimizer_index == Optimizers.ADAM:
-            # Hyperparameters range taken from arXiv:1412.6980.
-            optimizer_kwargs = {
-                "stepsize": trial.suggest_float("stepsize", 0.00001, 0.1),
-                "beta1": trial.suggest_float("beta1", 0, 0.9),
-                "beta2": trial.suggest_float("beta2", 0.99, 0.9999),
-            }
-            optimizer = AdamOptimizer(**optimizer_kwargs)
-
-        if optimizer_index == Optimizers.NESTEROV:
-            # Hyperparameters range taken from
-            # https://cs231n.github.io/neural-networks-3/
-            optimizer_kwargs = {
-                "stepsize": trial.suggest_float("stepsize", 0.00001, 0.1),
-                "momentum": trial.suggest_float("momentum", 0.5, 0.9),
-            }
-            optimizer = NesterovMomentumOptimizer(**optimizer_kwargs)
-
-        self._model.optimizer = optimizer
+        self._model.optimizer = self._suggest_optimizer(trial)
 
         initial_executions: int
         executions_sum: int = 0

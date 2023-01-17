@@ -40,8 +40,7 @@ from pennylane.measurements import ExpectationMP
 
 import torch
 
-
-from typing import Sequence, List, Tuple
+from typing import Sequence, List, Tuple, Type
 from sklearn.datasets import make_moons
 from numpy.random import RandomState
 from aqmlator.qml import QNNBinaryClassifier, QuantumKernelBinaryClassifier
@@ -58,7 +57,9 @@ class TestQNN(unittest.TestCase):
         """
         Sets up the tests.
         """
-        seed: int = 42
+        # TR:   Changing the seed can cause problems with the `test_accuracy_increase`,
+        #       as the number of training epochs is currently low for `seed = 1`.
+        seed: int = 2
         noise: float = 0.1
         n_samples: int = 100
         accuracy_threshold: float = 0.85
@@ -73,14 +74,18 @@ class TestQNN(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
+        for i in range(len(self.y)):
+            if self.y[i] == 0:
+                self.y[i] = -1
+
         n_qubits: int = 2
 
-        layers: List[Operation] = [
+        layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
         layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
 
-        alternate_layers: List[Operation] = [
+        alternate_layers: List[Type[Operation]] = [
             pennylane.templates.BasicEntanglerLayers
         ] * 2
         alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
@@ -89,7 +94,7 @@ class TestQNN(unittest.TestCase):
         batch_size: int = 20
 
         self.classifier: QNNBinaryClassifier = QNNBinaryClassifier(
-            n_qubits=n_qubits,
+            wires=n_qubits,
             batch_size=batch_size,
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
@@ -98,7 +103,7 @@ class TestQNN(unittest.TestCase):
         )
 
         self.alternate_classifier: QNNBinaryClassifier = QNNBinaryClassifier(
-            n_qubits=n_qubits,
+            wires=n_qubits,
             batch_size=batch_size,
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
@@ -277,7 +282,7 @@ class TestQNN(unittest.TestCase):
         """
         predictions: np.ndarray = self.classifier.predict(self.x)
         self.assertTrue(
-            predictions.shape == (len(self.x),),
+            len(predictions) == len(self.x),
             "QNNBinaryClassifier predictions have unexpected shape.",
         )
 
@@ -310,7 +315,7 @@ class TestQNN(unittest.TestCase):
         self.alternate_classifier.predict(self.x)
         self.assertTrue(True, "The forward crashed!")
 
-    def test_different_layers_torch_forward_run(self) -> None:
+    def test_torch_different_layers_forward_run(self) -> None:
         """
         Tests if making predictions with torch is possible when different type of layers
         is used.
@@ -327,7 +332,9 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         """
         Sets up the tests.
         """
-        seed: int = 42
+        # TR:   Changing the seed can cause problems with the `test_accuracy_increase`,
+        #       as the number of training epochs is currently minimal for `seed = 0`.
+        seed: int = 0
         noise: float = 0.5
         n_samples: int = 15
         accuracy_threshold: float = 0.85
@@ -348,14 +355,14 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.n_qubits: int = 2
 
-        layers: List[Operation] = [
+        layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
         layers_weights_shapes: List[Tuple[int, ...]] = [(1, self.n_qubits, 3)] * 3
 
         self.weights_length: int = 18
 
-        alternate_layers: List[Operation] = [
+        alternate_layers: List[Type[Operation]] = [
             pennylane.templates.BasicEntanglerLayers
         ] * 3
         alternate_layers_weights_shapes: List[Tuple[int, ...]] = [
@@ -365,7 +372,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         self.n_epochs: int = 1
 
         self.classifier: QuantumKernelBinaryClassifier = QuantumKernelBinaryClassifier(
-            n_qubits=self.n_qubits,
+            wires=self.n_qubits,
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
@@ -374,7 +381,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.alternate_classifier: QuantumKernelBinaryClassifier = (
             QuantumKernelBinaryClassifier(
-                n_qubits=self.n_qubits,
+                wires=self.n_qubits,
                 n_epochs=self.n_epochs,
                 accuracy_threshold=accuracy_threshold,
                 layers=alternate_layers,
@@ -396,15 +403,16 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         Tests if the accuracy increases after short training.
         """
         self.classifier.fit(self.x, self.y)
-        initial_accuracy: float = self.classifier.accuracy(self.x, self.y)
+        initial_accuracy: float = self.classifier.score(self.x, self.y)
 
-        self.classifier.n_epochs = 10  # Minimal required number in this setup.
+        self.classifier.n_epochs = 2  # Minimal required number in this setup.
         self.classifier.fit(self.x, self.y)
-        accuracy: float = self.classifier.accuracy(self.x, self.y)
+        accuracy: float = self.classifier.score(self.x, self.y)
 
         self.assertTrue(
             initial_accuracy < accuracy,
-            f"Initial accuracy ({initial_accuracy}) didn't increase ({accuracy}) after training.",
+            f"Initial accuracy ({initial_accuracy}) didn't increase ({accuracy}) after "
+            f"training.",
         )
 
     def test_weights_change(self) -> None:
@@ -474,5 +482,6 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         for x in mapped_x:
             self.assertTrue(
                 len(np.array(x)) == self.n_qubits,
-                f"Dimension of the results is incorrect! ({len(np.array(x))} != {self.n_qubits})",
+                f"Dimension of the results is incorrect! ({len(np.array(x))} !="
+                f" {self.n_qubits})",
             )

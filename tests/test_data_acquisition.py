@@ -4,8 +4,9 @@
 
 __author__ = "Tomasz Rybotycki"
 
-
-import unittest, csv, os
+import unittest
+import csv
+import os
 
 from typing import Tuple, Union, List
 
@@ -64,7 +65,7 @@ class TestDataAcquisition(unittest.TestCase):
         """
         try:
             os.remove(file_path)
-        except Exception:
+        except FileNotFoundError:
             pass
 
     def test_learning_datum_equality(self) -> None:
@@ -116,7 +117,7 @@ class TestDataAcquisition(unittest.TestCase):
         """
         receiver: CSVDataReceiver = CSVDataReceiver()
 
-        data: List[LearningDatum] = receiver.ReceiveData("learning_data.csv")
+        data: List[LearningDatum] = receiver.receive_data("learning_data.csv")
 
         self.assertTrue(
             len(data) == len(self._learning_data),
@@ -134,7 +135,7 @@ class TestDataAcquisition(unittest.TestCase):
         """
         receiver: CSVDataReceiver = CSVDataReceiver(target_index=3)
 
-        data: List[SupervisedLearningDatum] = receiver.ReceiveData(
+        data: List[SupervisedLearningDatum] = receiver.receive_data(
             "supervised_learning_data.csv"
         )
 

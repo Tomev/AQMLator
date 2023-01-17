@@ -79,7 +79,7 @@ class DataReceiverInterface(ABC):
     """
 
     @abstractmethod
-    def ReceiveData(self, data_file_path: str) -> List[LearningDatum]:
+    def receive_data(self, data_file_path: str) -> List[LearningDatum]:
         """
         The main method of the data receivers. It handles the initial data
 
@@ -111,7 +111,7 @@ class CSVDataReceiver(DataReceiverInterface):
         self._target_index: Union[int, None] = target_index
         super().__init__()
 
-    def ReceiveData(self, data_file_path: str) -> List[LearningDatum]:
+    def receive_data(self, data_file_path: str) -> List[LearningDatum]:
         """
         The main method of the data receiver. It takes the
 
