@@ -117,7 +117,7 @@ class TestDataAcquisition(unittest.TestCase):
         """
         receiver: CSVDataReceiver = CSVDataReceiver()
 
-        data: List[LearningDatum] = receiver.ReceiveData("learning_data.csv")
+        data: List[LearningDatum] = receiver.receive_data("learning_data.csv")
 
         self.assertTrue(
             len(data) == len(self._learning_data),
@@ -135,7 +135,7 @@ class TestDataAcquisition(unittest.TestCase):
         """
         receiver: CSVDataReceiver = CSVDataReceiver(target_index=3)
 
-        data: List[SupervisedLearningDatum] = receiver.ReceiveData(
+        data: List[SupervisedLearningDatum] = receiver.receive_data(
             "supervised_learning_data.csv"
         )
 
