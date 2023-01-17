@@ -315,7 +315,7 @@ class TestQNN(unittest.TestCase):
         self.alternate_classifier.predict(self.x)
         self.assertTrue(True, "The forward crashed!")
 
-    def test_different_layers_torch_forward_run(self) -> None:
+    def test_torch_different_layers_forward_run(self) -> None:
         """
         Tests if making predictions with torch is possible when different type of layers
         is used.
