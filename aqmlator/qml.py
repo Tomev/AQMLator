@@ -41,8 +41,10 @@ from itertools import chain
 from typing import Sequence, Callable, Optional, Dict, Any, Tuple, List, Type, Union
 
 from sklearn.svm import SVC
-from sklearn.base import ClassifierMixin
+from sklearn.base import ClassifierMixin, RegressorMixin
 from sklearn.model_selection import train_test_split
+
+from scipy.special import logit
 
 from pennylane import numpy as np
 from pennylane.templates.layers import StronglyEntanglingLayers
@@ -234,7 +236,7 @@ class QNNBinaryClassifier(QMLModel, ClassifierMixin):
     """
     This class implements a binary classifier that uses Quantum Neural Networks.
 
-    The classifier expects two classes given by ints 0 and 1.
+    The classifier expects two classes {0, 1}.
     """
 
     def __init__(
@@ -926,3 +928,303 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             the returned object is `np.ndarray` with `dtype=bool`.
         """
         return self._classifier.predict(features_lists)
+
+
+class QNNLinearRegression(QMLModel, RegressorMixin):
+    """
+
+    """
+    def __init__(
+        self,
+        wires: Union[int, Sequence[int]],
+        batch_size: int,
+        n_epochs: int = 1,
+        device_string: str = "lightning.qubit",
+        optimizer: Optional[GradientDescentOptimizer] = None,
+        embedding_method: Optional[Type[qml.operation.Operation]] = None,
+        embedding_kwargs: Optional[Dict[str, Any]] = None,
+        layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
+        layers_weights_shapes: Optional[Sequence[Tuple[int, ...]]] = None,
+        accuracy_threshold: float = 0.8,
+        initial_weights: Optional[Sequence[float]] = None,
+        rng_seed: int = 42,
+        validation_set_size: float = 0.2,
+        debug_flag: bool = True,
+    ) -> None:
+        """
+        The constructor for the `QNNBinaryClassifier` class.
+
+        :param wires:
+            The wires to use in the VQC or the number of qubits (and wires) used in the
+            VQC.
+        :param batch_size:
+            Size of a batches used during the training.
+        :param n_epochs:
+            The number of training epochs.
+        :param device_string:
+            A string naming the device used to run the VQC.
+        :param optimizer:
+            The optimizer that will be used in the training. `NesterovMomentumOptimizer`
+            with default parameters will be used as default.
+        :param embedding_method:
+            Embedding method of the data. By default - when `None` is specified - the
+            classifier will use `AmplitudeEmbedding`. See `_prepare_default_embedding`
+            for parameters details.
+        :param embedding_kwargs:
+            Keyword arguments for the embedding method. If none are specified the
+            classifier will use the default embedding method.
+        :param layers:
+            Layers to be used in the VQC. The layers will be applied in the given order.
+            A double `StronglyEntanglingLayer` will be used if `None` is given.
+        :param layers_weights_shapes:
+            The shapes of the corresponding layers. Note that the default layers setup
+            will be used if `None` is given.
+        :param accuracy_threshold:
+            The satisfactory accuracy of the classifier.
+        :param initial_weights:
+            The initial weights for the training.
+        :param rng_seed:
+            A seed used for random weights initialization.
+        :param validation_set_size:
+            A part of the training set that will be used for classifier validation.
+            It should be from (0, 1).
+        :param debug_flag:
+            A flag informing the classifier if the training info should be printed
+            to the console or not.
+        """
+        super().__init__(
+            wires,
+            device_string,
+            optimizer,
+            embedding_method,
+            embedding_kwargs,
+            layers,
+            layers_weights_shapes,
+            validation_set_size,
+            rng_seed,
+        )
+
+        self._n_epochs: int = n_epochs
+        self._batch_size: int = batch_size
+        self._dev_str: str = device_string
+
+        self._accuracy_threshold: float = accuracy_threshold
+
+        self._weights_length: int = 0
+
+        for shape in self._layers_weights_shapes:
+            self._weights_length += prod(shape)
+
+        if initial_weights is None or len(initial_weights) != self._weights_length:
+            initial_weights = [
+                np.pi * self._rng.random() for _ in range(self._weights_length)
+            ]
+
+        self.weights = initial_weights
+
+        self._dev = qml.device(device_string, wires=self.wires)
+
+        self._circuit: Callable[
+            [Sequence[float], Sequence[float]], float
+        ] = self._create_circuit()
+
+        self._debug_flag: bool = debug_flag
+
+    def _cost(
+            self,
+            weights: Sequence[float],
+            features_lists: Sequence[Sequence[float]],
+            classes: Sequence[int],
+    ) -> float:
+        """
+        Evaluates and returns the cost function value for the training purposes.
+
+        :param features_lists:
+            The lists of features of the objects that are being classified during the
+            training.
+
+        :param classes:
+            Classes corresponding to the given features.
+
+        :return:
+            The value of the square loss function.
+        """
+        expected_values = [self._circuit(x, weights) for x in features_lists]
+        predicted_values: np.ndarray = np.array(
+            [np.log(((x + 1)/ 2) / (1 - ((x + 1)/ 2)))  for x in expected_values]
+        )
+        return np.mean(predicted_values - np.array(classes) ** 2)
+
+    def fit(
+        self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
+    ) -> "RegressorMixin":
+        """
+        The classifier training method.
+
+        TODO TR: How to break this method down into smaller ones?
+
+        :param features_lists:
+            The lists of features of the objects that are used during the training.
+        :param classes:
+            A list of classes corresponding to the given lists of features.
+
+        :return:
+            Returns `self` after training.
+        """
+        self._dev = qml.device(self._device_string, wires=self.wires)
+        self._circuit = self._create_circuit()
+
+        self._split_data_for_training(features_lists, classes)
+
+        n_batches: int = max(1, len(features_lists) // self._batch_size)
+
+        feature_batches = np.array_split(
+            np.arange(len(self._training_features)), n_batches
+        )
+
+        best_weights: Sequence[float] = self.weights
+        best_accuracy: float = 0
+
+        self.weights = np.array(self.weights, requires_grad=True)
+        cost: float
+        batch_indices: np.tensor  # Of ints.
+
+        def _batch_cost(weights: Sequence[float]):
+            """
+            The cost function evaluated on the training data batch.
+
+            :param weights:
+                The weights to be applied to the VQC.
+
+            :return:
+                The value of `self._cost` function evaluated of the training data
+                batch.
+            """
+
+            score = self._cost(
+                weights,
+                self._training_features[batch_indices],
+                self._training_classes[batch_indices]
+            )
+
+            return score
+
+        initial_weights = self.weights
+
+        for it, batch_indices in enumerate(
+            chain(*(self._n_epochs * [feature_batches]))
+        ):
+            # Update the weights by one optimizer step
+            #try:
+            self.weights, cost = self.optimizer.step_and_cost(_batch_cost, self.weights)
+            #except Exception:
+            #    print("lol")
+
+            # Compute accuracy on the validation set
+            accuracy_validation = self.score(
+                self._validation_features, self._validation_classes
+                )
+
+            # Make decision about stopping the training basing on the validation score
+            if accuracy_validation >= best_accuracy:
+                best_accuracy = accuracy_validation
+                best_weights = self.weights
+
+            if self._debug_flag:
+                print(
+                    f"It: {it + 1} / {self._n_epochs * n_batches} | Cost: {cost} |"
+                    f" Accuracy (validation): {accuracy_validation}"
+                )
+
+            if accuracy_validation >= self._accuracy_threshold:
+                break
+
+        r = initial_weights == self.weights
+
+        return self
+
+    def _create_circuit(
+            self, interface: str = "autograd"
+    ) -> Callable[[Sequence[float], Sequence[float]], float]:
+        @qml.qnode(self._dev, interface=interface)
+        def circuit(
+                inputs: Union[Sequence[float], torch.Tensor],
+                weights: Union[np.ndarray, torch.Tensor],
+        ) -> float:
+            """
+            Returns the expectation value of the first qubit of the VQC of which the
+            weights are optimized during the learning process.
+
+            :param inputs:
+                Feature vector representing the object that is being classified.
+
+                :note:
+                This argument needs to be named `inputs` for torch to be able to use
+                the `circuit` method.
+            :param weights:
+                Weights that will be optimized during the learning process.
+
+            :return:
+                The expectation value (from range [-1, 1]) of the measurement in the
+                computational basis of given circuit. This value is interpreted as
+                the classification result and its confidence.
+            """
+            self._embedding_method(inputs, **self._embedding_kwargs)
+
+            start_weights: int = 0
+
+            for i, layer in enumerate(self._layers):
+                layer_weights = weights[
+                                start_weights: start_weights + prod(
+                                    self._layers_weights_shapes[i])
+                                ]
+
+                start_weights += prod(self._layers_weights_shapes[i])
+
+                layer_weights = layer_weights.reshape(
+                    self._layers_weights_shapes[i])
+
+                layer(layer_weights, wires=self.wires)
+
+            return qml.expval(qml.PauliZ((self.wires[0],)))
+
+        return circuit
+
+    def get_circuit_expectation_values(
+        self, features_lists: Sequence[Sequence[float]]
+    ) -> np.ndarray:
+        """
+        Computes and returns the expectation value of the `PauliZ` measurement of the
+        first qubit of the VQC.
+
+        :param features_lists:
+            Features that will be encoded at the input of the circuit.
+
+        :return:
+            The expectation value of the `PauliZ` measurement on the first qubit of the
+            VQC.
+        """
+        expectation_values: np.ndarray = np.zeros(len(features_lists), dtype=float)
+
+        for i, features in enumerate(features_lists):
+            expectation_values[i] = self._circuit(features, np.array(self.weights))
+
+        return expectation_values
+
+    def predict(self, features_lists: Sequence[Sequence[float]]) -> List[int]:
+        """
+        Predicts and returns the classes of the objects for which features were given.
+        It applies current `self.weights` as the parameters of VQC.
+
+        :param features_lists:
+            Objects' features to be encoded at the input of the VQC.
+
+        :return:
+            The results - classes 0 or 1 - of the classification. The data structure of
+            the returned object is `np.ndarray` with `dtype=bool`.
+        """
+        expectation_values: Sequence[float] = self.get_circuit_expectation_values(
+            features_lists
+        )
+
+        return [logit((v + 1) / 2) for v in expectation_values]

@@ -41,14 +41,14 @@ from pennylane.measurements import ExpectationMP
 import torch
 
 from typing import Sequence, List, Tuple, Type
-from sklearn.datasets import make_moons
+from sklearn.datasets import make_moons, make_regression
 from numpy.random import RandomState
-from aqmlator.qml import QNNBinaryClassifier, QuantumKernelBinaryClassifier
+from aqmlator.qml import QNNBinaryClassifier, QuantumKernelBinaryClassifier, QNNLinearRegression
 
 from pennylane import numpy as np
 
 
-class TestQNN(unittest.TestCase):
+class TestQNNBinaryClassifier(unittest.TestCase):
     """
     A `TestCase` class for the qnn module.
     """
@@ -485,3 +485,147 @@ class TestQEKBinaryClassifier(unittest.TestCase):
                 f"Dimension of the results is incorrect! ({len(np.array(x))} !="
                 f" {self.n_qubits})",
             )
+
+
+class TestQNNLinearRegressor(unittest.TestCase):
+    """
+    A `TestCase` class for the qnn module.
+    """
+
+    def setUp(self) -> None:
+        """
+        Sets up the tests.
+        """
+        # TR:   Changing the seed can cause problems with the `test_accuracy_increase`,
+        #       as the number of training epochs is currently low for `seed = 1`.
+        seed: int = 2
+        noise: float = 0.1
+        n_samples: int = 100
+        accuracy_threshold: float = 0.85
+
+        self.x: Sequence[Sequence[float]]
+        self.y: Sequence[int]
+
+        self.x, self.y = make_regression(
+            n_samples=n_samples,
+            n_features=2,
+            shuffle=True,
+            noise=noise,
+            random_state=RandomState(seed),
+        )
+
+        n_qubits: int = 2
+
+        layers: List[Type[Operation]] = [
+            StronglyEntanglingLayers
+        ] * 3  # 3 StronglyEntanglingLayers
+        layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
+
+        alternate_layers: List[Type[Operation]] = [
+            pennylane.templates.BasicEntanglerLayers
+        ] * 2
+        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
+
+        self.n_epochs: int = 2
+        batch_size: int = 20
+
+        self.regressor: QNNLinearRegression = QNNLinearRegression(
+            wires=n_qubits,
+            batch_size=batch_size,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=accuracy_threshold,
+            layers=layers,
+            layers_weights_shapes=layers_weights_shapes,
+        )
+
+        self.alternate_regressor: QNNLinearRegression = QNNLinearRegression(
+            wires=n_qubits,
+            batch_size=batch_size,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=accuracy_threshold,
+            layers=alternate_layers,
+            layers_weights_shapes=alternate_layers_weights_shapes,
+        )
+
+    @staticmethod
+    def get_weights(model: torch.nn.Module) -> List[np.ndarray]:
+        """
+        Extract the weights from the given model.
+
+        :param model:
+            The model to extract the weights from.
+
+        :return:
+            The current weights of the model.
+        """
+        weights: List[np.ndarray] = []
+
+        for name, param in model.named_parameters():
+            weights.append(np.array(param.detach().numpy()))
+
+        return weights
+
+    def test_forward_run(self) -> None:
+        """
+        Tests if making predictions is possible.
+        """
+        self.regressor.predict(self.x)
+        self.assertTrue(True, "The forward crashed!")
+
+    def test_learning_run(self) -> None:
+        """
+        Tests if the learning runs smoothly.
+        """
+        self.regressor.fit(self.x, self.y)
+        self.assertTrue(True, "The learning crashed.")
+
+    def test_accuracy_increase(self) -> None:
+        """
+        Tests if the accuracy increases after short training.
+        """
+        initial_score: float = self.regressor.score(self.x, self.y)
+        self.regressor.fit(self.x, self.y)
+        final_score: float = self.regressor.score(self.x, self.y)
+        self.assertTrue(
+            final_score > initial_score,
+            f"QNN Training: Initial score ({initial_score}) is greater than the final"
+            f" score ({final_score})!",
+        )
+
+    def test_weights_change(self) -> None:
+        """
+        Tests if the weights change during the training.
+        """
+        initial_weights: Sequence[float] = self.regressor.weights
+        self.regressor.fit(self.x, self.y)
+
+        self.assertTrue(
+            tuple(initial_weights) != tuple(self.regressor.weights),
+            "Weights didn't change during the training!",
+        )
+
+    def test_results_dimensions(self) -> None:
+        """
+        Tests if the predictions have expected dimensions.
+        """
+        predictions: np.ndarray = self.regressor.predict(self.x)
+        self.assertTrue(
+            len(predictions) == len(self.x),
+            "QNNBinaryClassifier predictions have unexpected shape.",
+        )
+
+    def test_executions_number_growth(self) -> None:
+        """
+        Tests if the number of executions grows when the model is executed.
+        """
+        self.regressor.predict(self.x)
+        self.assertTrue(
+            self.regressor.n_executions() > 0, "The number of executions don't grow!"
+        )
+
+    def test_different_layers_forward_run(self) -> None:
+        """
+        Tests if making predictions is possible when different type of layers is used.
+        """
+        self.alternate_regressor.predict(self.x)
+        self.assertTrue(True, "The forward crashed!")
