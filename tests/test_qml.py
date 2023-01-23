@@ -143,87 +143,6 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         self.alternate_model.predict(self.x)
         self.assertTrue(True, "The forward crashed!")
 
-class TestQNNBinaryClassifier(TestQNNModel):
-    """
-    A `TestCase` class for the qnn module.
-    """
-
-    def setUp(self) -> None:
-        """
-        Sets up the tests.
-        """
-        # TR:   Changing the seed can cause problems with the `test_accuracy_increase`,
-        #       as the number of training epochs is currently low for `seed = 1`.
-        seed: int = 2
-        noise: float = 0.1
-        n_samples: int = 100
-        accuracy_threshold: float = 0.85
-
-        self.x: Sequence[Sequence[float]]
-        self.y: Sequence[int]
-
-        self.x, self.y = make_moons(
-            n_samples=n_samples,
-            shuffle=True,
-            noise=noise,
-            random_state=RandomState(seed),
-        )
-
-        for i in range(len(self.y)):
-            if self.y[i] == 0:
-                self.y[i] = -1
-
-        n_qubits: int = 2
-
-        layers: List[Type[Operation]] = [
-            StronglyEntanglingLayers
-        ] * 3  # 3 StronglyEntanglingLayers
-        layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
-
-        alternate_layers: List[Type[Operation]] = [
-            pennylane.templates.BasicEntanglerLayers
-        ] * 2
-        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
-
-        self.n_epochs: int = 2
-        batch_size: int = 20
-
-        self.model: QNNBinaryClassifier = QNNBinaryClassifier(
-            wires=n_qubits,
-            batch_size=batch_size,
-            n_epochs=self.n_epochs,
-            accuracy_threshold=accuracy_threshold,
-            layers=layers,
-            layers_weights_shapes=layers_weights_shapes,
-        )
-
-        self.alternate_model: QNNBinaryClassifier = QNNBinaryClassifier(
-            wires=n_qubits,
-            batch_size=batch_size,
-            n_epochs=self.n_epochs,
-            accuracy_threshold=accuracy_threshold,
-            layers=alternate_layers,
-            layers_weights_shapes=alternate_layers_weights_shapes,
-        )
-
-    @staticmethod
-    def get_weights(model: torch.nn.Module) -> List[np.ndarray]:
-        """
-        Extract the weights from the given model.
-
-        :param model:
-            The model to extract the weights from.
-
-        :return:
-            The current weights of the model.
-        """
-        weights: List[np.ndarray] = []
-
-        for name, param in model.named_parameters():
-            weights.append(np.array(param.detach().numpy()))
-
-        return weights
-
     def test_torch_forward_run(self) -> None:
         """
         Tests if making predictions with torch classifier is possible.
@@ -355,6 +274,71 @@ class TestQNNBinaryClassifier(TestQNNModel):
         )
         model.forward(torch.tensor(self.x))
         self.assertTrue(True, "The torch forward crashed!")
+
+class TestQNNBinaryClassifier(TestQNNModel):
+    """
+    A `TestCase` class for the qnn module.
+    """
+
+    def setUp(self) -> None:
+        """
+        Sets up the tests.
+        """
+        # TR:   Changing the seed can cause problems with the `test_accuracy_increase`,
+        #       as the number of training epochs is currently low for `seed = 1`.
+        seed: int = 2
+        noise: float = 0.1
+        n_samples: int = 100
+        accuracy_threshold: float = 0.85
+
+        self.x: Sequence[Sequence[float]]
+        self.y: Sequence[int]
+
+        self.x, self.y = make_moons(
+            n_samples=n_samples,
+            shuffle=True,
+            noise=noise,
+            random_state=RandomState(seed),
+        )
+
+        for i in range(len(self.y)):
+            if self.y[i] == 0:
+                self.y[i] = -1
+
+        n_qubits: int = 2
+
+        layers: List[Type[Operation]] = [
+            StronglyEntanglingLayers
+        ] * 3  # 3 StronglyEntanglingLayers
+        layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
+
+        alternate_layers: List[Type[Operation]] = [
+            pennylane.templates.BasicEntanglerLayers
+        ] * 2
+        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
+
+        self.n_epochs: int = 2
+        batch_size: int = 20
+
+        self.model: QNNBinaryClassifier = QNNBinaryClassifier(
+            wires=n_qubits,
+            batch_size=batch_size,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=accuracy_threshold,
+            layers=layers,
+            layers_weights_shapes=layers_weights_shapes,
+        )
+
+        self.alternate_model: QNNBinaryClassifier = QNNBinaryClassifier(
+            wires=n_qubits,
+            batch_size=batch_size,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=accuracy_threshold,
+            layers=alternate_layers,
+            layers_weights_shapes=alternate_layers_weights_shapes,
+        )
+
+
 
 
 class TestQNNLinearRegressor(TestQNNModel):

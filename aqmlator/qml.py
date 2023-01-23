@@ -421,6 +421,7 @@ class QNNModel(QMLModel, abc.ABC):
             The value of the square loss function.
         """
         raise NotImplemented
+
     def fit(
         self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
     ) -> "QNNModel":
@@ -502,6 +503,35 @@ class QNNModel(QMLModel, abc.ABC):
         self.weights = best_weights
 
         return self
+
+    def _prepare_torch_inputs(self, inputs: torch.Tensor) -> torch.Tensor:
+        """
+        Torch inputs might need some manual preprocessing in some cases. This method
+        handles this preprocessing.
+
+        :param inputs:
+            Inputs given by the
+        :return:
+            Preprocessed inputs.
+        """
+        # TODO TR: Think of better way to do it.
+        if self._embedding_method == AmplitudeEmbedding:
+            padding: torch.Tensor = torch.zeros(
+                [2 ** len(self.wires) - len(inputs)])
+            inputs = torch.cat((inputs, padding))
+
+        return inputs
+
+    def get_torch_layer(self) -> torch.nn.Module:
+        """
+        This method creates a PyTorch (quantum) layer based on the VQC.
+
+        :return:
+            Returns a PyTorch Layer made from the VQC.
+        """
+
+        weight_shapes: Dict[str, int] = {"weights": len(self.weights)}
+        return qml.qnn.TorchLayer(self._create_circuit("torch"), weight_shapes)
 
 class QNNBinaryClassifier(QNNModel, ClassifierMixin):
     """
@@ -627,33 +657,7 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
         )
         return [2 * int(val >= 0.0) - 1 for val in expectation_values]
 
-    def _prepare_torch_inputs(self, inputs: torch.Tensor) -> torch.Tensor:
-        """
-        Torch inputs might need some manual preprocessing in some cases. This method
-        handles this preprocessing.
 
-        :param inputs:
-            Inputs given by the
-        :return:
-            Preprocessed inputs.
-        """
-        # TODO TR: Think of better way to do it.
-        if self._embedding_method == AmplitudeEmbedding:
-            padding: torch.Tensor = torch.zeros([2 ** len(self.wires) - len(inputs)])
-            inputs = torch.cat((inputs, padding))
-
-        return inputs
-
-    def get_torch_layer(self) -> torch.nn.Module:
-        """
-        This method creates a PyTorch (quantum) layer based on the VQC.
-
-        :return:
-            Returns a PyTorch Layer made from the VQC.
-        """
-
-        weight_shapes: Dict[str, int] = {"weights": len(self.weights)}
-        return qml.qnn.TorchLayer(self._create_circuit("torch"), weight_shapes)
 
 
 class QNNLinearRegression(QNNModel, RegressorMixin):
