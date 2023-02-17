@@ -1,5 +1,7 @@
 FROM continuumio/anaconda3
-RUN pip install requirements.txt
+COPY . /opt/app
+WORKDIR /opt/app
+RUN pip install -r requirements.txt
 RUN pip install tox
 RUN pip install tox-current-env
-RUN pip install requirements_dev.txt
+RUN pip install -r requirements_dev.txt
