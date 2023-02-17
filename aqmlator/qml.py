@@ -44,8 +44,6 @@ from sklearn.svm import SVC
 from sklearn.base import ClassifierMixin, RegressorMixin
 from sklearn.model_selection import train_test_split
 
-from scipy.special import logit
-
 from pennylane import numpy as np
 from pennylane.templates.layers import StronglyEntanglingLayers
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
@@ -252,6 +250,9 @@ class QNNModel(QMLModel, abc.ABC):
         initial_weights: Optional[Sequence[float]] = None,
         rng_seed: int = 42,
         validation_set_size: float = 0.2,
+        prediction_function: Optional[
+            Callable[[Sequence[float]], Union[Sequence[float], Sequence[int]]]
+        ] = None,
         debug_flag: bool = True,
     ) -> None:
         """
@@ -291,6 +292,9 @@ class QNNModel(QMLModel, abc.ABC):
         :param validation_set_size:
             A part of the training set that will be used for model validation.
             It should be from (0, 1).
+        :param prediction_function:
+            A prediction function that will be used to process the output of the VQC.
+            If `None` then the default one (for given model) will be used.
         :param debug_flag:
             A flag informing the model if the training info should be printed to the
             console or not.
@@ -328,10 +332,17 @@ class QNNModel(QMLModel, abc.ABC):
         self._dev = qml.device(device_string, wires=self.wires)
 
         self._circuit: Callable[
-            [Sequence[float], Sequence[float]], float
+            [Sequence[float], Sequence[float]], Sequence[float]
         ] = self._create_circuit()
 
         self._debug_flag: bool = debug_flag
+
+        if prediction_function is None:
+            prediction_function = self._default_prediction_function
+
+        self._prediction_function: Callable[
+            [Sequence[float]], Sequence[float]
+        ] = prediction_function
 
     def _create_circuit(
         self, interface: str = "autograd"
@@ -398,7 +409,7 @@ class QNNModel(QMLModel, abc.ABC):
             VQC.
         """
 
-        expectation_values: List[float] = []
+        expectation_values: List[Sequence[float]] = []
 
         for i, features in enumerate(features_lists):
             expectation_values.append(self._circuit(features, np.array(self.weights)))
@@ -427,7 +438,20 @@ class QNNModel(QMLModel, abc.ABC):
         """
         raise NotImplemented
 
-    # @abc.abstractmethod
+    @abc.abstractmethod
+    def _default_prediction_function(
+        self, circuit_outputs: Sequence[Sequence[float]]
+    ) -> Union[Sequence[float], Sequence[int]]:
+        """
+        The default prediction function that should be specified for every QNN-based
+        model.
+
+        :param circuit_output:
+            The output of the VQC.
+
+        :return:
+            Returns prediction value for the given problem.
+        """
 
     def fit(self, X: Sequence[Sequence[float]], y: Sequence[int]) -> "QNNModel":
         """
@@ -531,6 +555,19 @@ class QNNModel(QMLModel, abc.ABC):
         weight_shapes: Dict[str, int] = {"weights": len(self.weights)}
         return qml.qnn.TorchLayer(self._create_circuit("torch"), weight_shapes)
 
+    def predict(
+        self, features: Sequence[Sequence[float]]
+    ) -> Union[Sequence[float], Sequence[int]]:
+        """
+        Returns predictions of the model for the given features.
+
+        :param features:
+            Features of the objects for which the model will predict the values.
+        :return:
+            Values predicted for given features.
+        """
+        return self._prediction_function(self.get_circuit_expectation_values(features))
+
 
 class QNNBinaryClassifier(QNNModel, ClassifierMixin):
     """
@@ -554,6 +591,9 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
         initial_weights: Optional[Sequence[float]] = None,
         rng_seed: int = 42,
         validation_set_size: float = 0.2,
+        prediction_function: Optional[
+            Callable[[Sequence[float]], Union[Sequence[float], Sequence[int]]]
+        ] = None,
         debug_flag: bool = True,
     ) -> None:
         """
@@ -593,6 +633,9 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
         :param validation_set_size:
             A part of the training set that will be used for classifier validation.
             It should be from (0, 1).
+        :param prediction_function:
+            A prediction function that will be used to process the output of the VQC.
+            If `None` then the default one will be used.
         :param debug_flag:
             A flag informing the classifier if the training info should be printed
             to the console or not.
@@ -611,6 +654,7 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
             initial_weights,
             rng_seed,
             validation_set_size,
+            prediction_function,
             debug_flag,
         )
 
@@ -639,23 +683,19 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
 
         return np.mean((expectation_values - np.array(y)) ** 2)
 
-    def predict(self, features_lists: Sequence[Sequence[float]]) -> List[int]:
+    def _default_prediction_function(
+        self, circuit_outputs: Sequence[Sequence[float]]
+    ) -> Sequence[int]:
         """
-        Predicts and returns the classes of the objects for which features were given.
-        It applies current `self.weights` as the parameters of VQC.
+        The default prediction function of the QNNClassifier.
 
-        :param features_lists:
-            Objects' features to be encoded at the input of the VQC.
+        :param circuit_output:
+            The outputs of the VQC.
 
         :return:
-            The results - classes 0 or 1 - of the classification. The data structure of
-            the returned object is `np.ndarray` with `dtype=bool`.
+            Returns classification prediction value for the given problem.
         """
-        expectation_values: Sequence[float] = self.get_circuit_expectation_values(
-            features_lists
-        )
-
-        return [2 * int(val >= 0.0) - 1 for val in [x[0] for x in expectation_values]]
+        return [2 * int(val >= 0.0) - 1 for val in [x[0] for x in circuit_outputs]]
 
 
 class QNNLinearRegression(QNNModel, RegressorMixin):
@@ -676,6 +716,9 @@ class QNNLinearRegression(QNNModel, RegressorMixin):
         initial_weights: Optional[Sequence[float]] = None,
         rng_seed: int = 42,
         validation_set_size: float = 0.2,
+        prediction_function: Optional[
+            Callable[[Sequence[float]], Sequence[float]]
+        ] = None,
         debug_flag: bool = True,
     ) -> None:
         """
@@ -715,6 +758,9 @@ class QNNLinearRegression(QNNModel, RegressorMixin):
         :param validation_set_size:
             A part of the training set that will be used for classifier validation.
             It should be from (0, 1).
+        :param prediction_function:
+            A prediction function that will be used to process the output of the VQC.
+            If `None` then the default one will be used.
         :param debug_flag:
             A flag informing the classifier if the training info should be printed
             to the console or not.
@@ -733,6 +779,7 @@ class QNNLinearRegression(QNNModel, RegressorMixin):
             initial_weights,
             rng_seed,
             validation_set_size,
+            prediction_function,
             debug_flag,
         )
 
@@ -765,26 +812,22 @@ class QNNLinearRegression(QNNModel, RegressorMixin):
         )
         return np.mean(predicted_values - np.array(y) ** 2)
 
-    def predict(self, features_lists: Sequence[Sequence[float]]) -> List[int]:
+    def _default_prediction_function(
+        self, circuit_outputs: Sequence[Sequence[float]]
+    ) -> Sequence[float]:
         """
-        Predicts and returns the classes of the objects for which features were given.
-        It applies current `self.weights` as the parameters of VQC.
+        The default prediction function of the QNNClassifier.
 
-        :param features_lists:
-            Objects' features to be encoded at the input of the VQC.
+        :param circuit_output:
+            The outputs of the VQC.
 
         :return:
-            The results - classes 0 or 1 - of the classification. The data structure of
-            the returned object is `np.ndarray` with `dtype=bool`.
+            Returns classification prediction value for the given problem.
         """
-        expectation_values: Sequence[float] = self.get_circuit_expectation_values(
-            features_lists
-        )
-
         predicted_values: np.ndarray = np.array(
             [
                 sum([np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x])
-                for x in expectation_values
+                for x in circuit_outputs
             ]
         )
 
