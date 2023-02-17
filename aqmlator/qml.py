@@ -149,10 +149,10 @@ class QMLModel(MLModel, abc.ABC):
         else:
             self.wires = wires
 
-        self._training_features: Sequence[Sequence[float]]
-        self._training_classes: Sequence[int]
-        self._validation_features: Sequence[Sequence[float]]
-        self._validation_classes: Sequence[int]
+        self._training_X: Sequence[Sequence[float]]
+        self._training_y: Sequence[int]
+        self._validation_X: Sequence[Sequence[float]]
+        self._validation_y: Sequence[int]
 
         self._embedding_method: Type[qml.operation.Operation]
         self._embedding_kwargs: Dict[str, Any]
@@ -208,33 +208,35 @@ class QMLModel(MLModel, abc.ABC):
         self._layers_weights_shapes = [(1, len(self.wires), 3)] * 2
 
     def _split_data_for_training(
-        self, features: Sequence[Sequence[float]], classes: Sequence[int]
+        self, X: Sequence[Sequence[float]], y: Sequence[int]
     ) -> None:
         """
         Splits the objects into validation and training sets. Should be called before
         the training, usually near the beginning of the `fit` method.
 
-        :param features:
+        :param X:
             All object features that will be split into training and validation set.
-        :param classes:
+        :param y:
             Corresponding classes that will be split into training and validation set.
         """
         (
-            self._training_features,
-            self._validation_features,
-            self._training_classes,
-            self._validation_classes,
+            self._training_X,
+            self._validation_X,
+            self._training_y,
+            self._validation_y,
         ) = train_test_split(
-            features,
-            classes,
+            X,
+            y,
             test_size=self._validation_set_size,
             random_state=self._rng_seed,
         )
 
+
 class QNNModel(QMLModel, abc.ABC):
     """
-     A boilerplate class, providing an interface for future QNN-Based models.
+    A boilerplate class, providing an interface for future QNN-Based models.
     """
+
     def __init__(
         self,
         wires: Union[int, Sequence[int]],
@@ -253,7 +255,7 @@ class QNNModel(QMLModel, abc.ABC):
         debug_flag: bool = True,
     ) -> None:
         """
-        The constructor for the `QNNBinaryClassifier` class.
+        The constructor for the `QNNModel` class.
 
         :param wires:
             The wires to use in the VQC or the number of qubits (and wires) used in the
@@ -269,11 +271,11 @@ class QNNModel(QMLModel, abc.ABC):
             with default parameters will be used as default.
         :param embedding_method:
             Embedding method of the data. By default - when `None` is specified - the
-            classifier will use `AmplitudeEmbedding`. See `_prepare_default_embedding`
+            model will use `AmplitudeEmbedding`. See `_prepare_default_embedding`
             for parameters details.
         :param embedding_kwargs:
             Keyword arguments for the embedding method. If none are specified the
-            classifier will use the default embedding method.
+            model will use the default embedding method.
         :param layers:
             Layers to be used in the VQC. The layers will be applied in the given order.
             A double `StronglyEntanglingLayer` will be used if `None` is given.
@@ -281,17 +283,17 @@ class QNNModel(QMLModel, abc.ABC):
             The shapes of the corresponding layers. Note that the default layers setup
             will be used if `None` is given.
         :param accuracy_threshold:
-            The satisfactory accuracy of the classifier.
+            The satisfactory accuracy of the model.
         :param initial_weights:
             The initial weights for the training.
         :param rng_seed:
             A seed used for random weights initialization.
         :param validation_set_size:
-            A part of the training set that will be used for classifier validation.
+            A part of the training set that will be used for model validation.
             It should be from (0, 1).
         :param debug_flag:
-            A flag informing the classifier if the training info should be printed
-            to the console or not.
+            A flag informing the model if the training info should be printed to the
+            console or not.
         """
         super().__init__(
             wires,
@@ -333,18 +335,19 @@ class QNNModel(QMLModel, abc.ABC):
 
     def _create_circuit(
         self, interface: str = "autograd"
-    ) -> Callable[[Sequence[float], Sequence[float]], float]:
+    ) -> Callable[[Sequence[float], Sequence[float]], Sequence[float]]:
         @qml.qnode(self._dev, interface=interface)
         def circuit(
             inputs: Union[Sequence[float], torch.Tensor],
             weights: Union[np.ndarray, torch.Tensor],
-        ) -> float:
+        ) -> Sequence[float]:
             """
             Returns the expectation value of the first qubit of the VQC of which the
             weights are optimized during the learning process.
 
             :param inputs:
-                Feature vector representing the object that is being classified.
+                Feature vector representing the object for which value is being
+                predicted.
 
                 :note:
                 This argument needs to be named `inputs` for torch to be able to use
@@ -354,8 +357,7 @@ class QNNModel(QMLModel, abc.ABC):
 
             :return:
                 The expectation value (from range [-1, 1]) of the measurement in the
-                computational basis of given circuit. This value is interpreted as
-                the classification result and its confidence.
+                computational basis of given circuit.
             """
 
             if isinstance(inputs, torch.Tensor):
@@ -376,7 +378,8 @@ class QNNModel(QMLModel, abc.ABC):
 
                 layer(layer_weights, wires=self.wires)
 
-            return qml.expval(qml.PauliZ((self.wires[0],)))
+            return [qml.expval(qml.PauliZ((i))) for i in self.wires]
+            # return qml.expval(qml.PauliZ((self.wires[0],)))
 
         return circuit
 
@@ -394,46 +397,48 @@ class QNNModel(QMLModel, abc.ABC):
             The expectation value of the `PauliZ` measurement on the first qubit of the
             VQC.
         """
-        expectation_values: np.ndarray = np.zeros(len(features_lists), dtype=float)
+
+        expectation_values: List[float] = []
 
         for i, features in enumerate(features_lists):
-            expectation_values[i] = self._circuit(features, np.array(self.weights))
+            expectation_values.append(self._circuit(features, np.array(self.weights)))
 
-        return expectation_values
+        return np.array(expectation_values)
 
     @abc.abstractmethod
-    def _cost(self,
+    def _cost(
+        self,
         weights: Sequence[float],
-        features_lists: Sequence[Sequence[float]],
-        classes: Sequence[int],
+        X: Sequence[Sequence[float]],
+        y: Sequence[int],
     ) -> float:
         """
         Evaluates and returns the cost function value for the training purposes.
 
-        :param features_lists:
-            The lists of features of the objects that are being classified during the
-            training.
+        :param X:
+            The lists of features of the objects for which values are being predicted
+            during the training.
 
-        :param classes:
-            Classes corresponding to the given features.
+        :param y:
+            Outputs corresponding to the given features.
 
         :return:
             The value of the square loss function.
         """
         raise NotImplemented
 
-    def fit(
-        self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
-    ) -> "QNNModel":
+    # @abc.abstractmethod
+
+    def fit(self, X: Sequence[Sequence[float]], y: Sequence[int]) -> "QNNModel":
         """
-        The classifier training method.
+        The model training method.
 
         TODO TR: How to break this method down into smaller ones?
 
-        :param features_lists:
+        :param X:
             The lists of features of the objects that are used during the training.
-        :param classes:
-            A list of classes corresponding to the given lists of features.
+        :param y:
+            A list of outputs corresponding to the given lists of features.
 
         :return:
             Returns `self` after training.
@@ -441,18 +446,14 @@ class QNNModel(QMLModel, abc.ABC):
         self._dev = qml.device(self._device_string, wires=self.wires)
         self._circuit = self._create_circuit()
 
-        self._split_data_for_training(features_lists, classes)
+        self._split_data_for_training(X, y)
 
-        n_batches: int = max(1, len(features_lists) // self._batch_size)
+        n_batches: int = max(1, len(X) // self._batch_size)
 
-        feature_batches = np.array_split(
-            np.arange(len(self._training_features)), n_batches
-        )
+        feature_batches = np.array_split(np.arange(len(self._training_X)), n_batches)
 
         best_weights: Sequence[float] = self.weights
-        best_accuracy: float = self.score(
-                self._validation_features, self._validation_classes
-            )
+        best_accuracy: float = self.score(self._validation_X, self._validation_y)
 
         self.weights = np.array(self.weights, requires_grad=True)
         cost: float
@@ -471,8 +472,8 @@ class QNNModel(QMLModel, abc.ABC):
             """
             return self._cost(
                 weights,
-                self._training_features[batch_indices],
-                self._training_classes[batch_indices],
+                self._training_X[batch_indices],
+                self._training_y[batch_indices],
             )
 
         for it, batch_indices in enumerate(
@@ -482,9 +483,7 @@ class QNNModel(QMLModel, abc.ABC):
             self.weights, cost = self.optimizer.step_and_cost(_batch_cost, self.weights)
 
             # Compute accuracy on the validation set
-            accuracy_validation = self.score(
-                self._validation_features, self._validation_classes
-            )
+            accuracy_validation = self.score(self._validation_X, self._validation_y)
 
             # Make decision about stopping the training basing on the validation score
             if accuracy_validation >= best_accuracy:
@@ -516,8 +515,7 @@ class QNNModel(QMLModel, abc.ABC):
         """
         # TODO TR: Think of better way to do it.
         if self._embedding_method == AmplitudeEmbedding:
-            padding: torch.Tensor = torch.zeros(
-                [2 ** len(self.wires) - len(inputs)])
+            padding: torch.Tensor = torch.zeros([2 ** len(self.wires) - len(inputs)])
             inputs = torch.cat((inputs, padding))
 
         return inputs
@@ -532,6 +530,7 @@ class QNNModel(QMLModel, abc.ABC):
 
         weight_shapes: Dict[str, int] = {"weights": len(self.weights)}
         return qml.qnn.TorchLayer(self._create_circuit("torch"), weight_shapes)
+
 
 class QNNBinaryClassifier(QNNModel, ClassifierMixin):
     """
@@ -558,7 +557,7 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
         debug_flag: bool = True,
     ) -> None:
         """
-        The constructor for the `QNNModel` class.
+        The constructor for the `QNNBinaryClassifier` class.
 
         :param wires:
             The wires to use in the VQC or the number of qubits (and wires) used in the
@@ -574,8 +573,8 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
             with default parameters will be used as default.
         :param embedding_method:
             Embedding method of the data. By default - when `None` is specified - the
-            classifier will use `AmplitudeEmbedding`. See `_prepare_default_embedding`
-            for parameters details.
+            classifier will use `AngleEmbedding`. See `_prepare_default_embedding` for
+            parameters details.
         :param embedding_kwargs:
             Keyword arguments for the embedding method. If none are specified the
             classifier will use the default embedding method.
@@ -612,33 +611,33 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
             initial_weights,
             rng_seed,
             validation_set_size,
-            debug_flag
+            debug_flag,
         )
 
     def _cost(
         self,
         weights: Sequence[float],
-        features_lists: Sequence[Sequence[float]],
-        classes: Sequence[int],
+        X: Sequence[Sequence[float]],
+        y: Sequence[int],
     ) -> float:
         """
         Evaluates and returns the cost function value for the training purposes.
 
-        :param features_lists:
+        :param X:
             The lists of features of the objects that are being classified during the
             training.
 
-        :param classes:
+        :param y:
             Classes corresponding to the given features.
 
         :return:
             The value of the square loss function.
         """
         expectation_values: np.ndarray = np.array(
-            [self._circuit(x, weights) for x in features_lists]
+            [self._circuit(x, weights)[0] for x in X]
         )
-        return np.mean((expectation_values - np.array(classes)) ** 2)
 
+        return np.mean((expectation_values - np.array(y)) ** 2)
 
     def predict(self, features_lists: Sequence[Sequence[float]]) -> List[int]:
         """
@@ -655,15 +654,13 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
         expectation_values: Sequence[float] = self.get_circuit_expectation_values(
             features_lists
         )
-        return [2 * int(val >= 0.0) - 1 for val in expectation_values]
 
-
+        return [2 * int(val >= 0.0) - 1 for val in [x[0] for x in expectation_values]]
 
 
 class QNNLinearRegression(QNNModel, RegressorMixin):
-    """
+    """ """
 
-    """
     def __init__(
         self,
         wires: Union[int, Sequence[int]],
@@ -736,33 +733,37 @@ class QNNLinearRegression(QNNModel, RegressorMixin):
             initial_weights,
             rng_seed,
             validation_set_size,
-            debug_flag
+            debug_flag,
         )
 
     def _cost(
-            self,
-            weights: Sequence[float],
-            features_lists: Sequence[Sequence[float]],
-            classes: Sequence[int],
+        self,
+        weights: Sequence[float],
+        X: Sequence[Sequence[float]],
+        y: Sequence[int],
     ) -> float:
         """
         Evaluates and returns the cost function value for the training purposes.
 
-        :param features_lists:
+        :param X:
             The lists of features of the objects that are being classified during the
             training.
 
-        :param classes:
+        :param y:
             Classes corresponding to the given features.
 
         :return:
             The value of the square loss function.
         """
-        expected_values = [self._circuit(x, weights) for x in features_lists]
+        expected_values = [self._circuit(x, weights) for x in X]
+
         predicted_values: np.ndarray = np.array(
-            [np.log(((x + 1)/ 2) / (1 - ((x + 1)/ 2)))  for x in expected_values]
+            [
+                sum([np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x])
+                for x in expected_values
+            ]
         )
-        return np.mean((predicted_values - np.array(classes)) ** 2)
+        return np.mean(predicted_values - np.array(y) ** 2)
 
     def predict(self, features_lists: Sequence[Sequence[float]]) -> List[int]:
         """
@@ -780,7 +781,14 @@ class QNNLinearRegression(QNNModel, RegressorMixin):
             features_lists
         )
 
-        return [logit((v + 1) / 2) for v in expectation_values]
+        predicted_values: np.ndarray = np.array(
+            [
+                sum([np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x])
+                for x in expectation_values
+            ]
+        )
+
+        return [v for v in predicted_values]
 
 
 class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
@@ -1051,13 +1059,13 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             # Choose subset of datapoints to compute the KTA on.
             subset: np.ndarray = np.array(
                 self._rng.sample(
-                    list(range(len(self._training_features))), self._kta_subset_size
+                    list(range(len(self._training_X))), self._kta_subset_size
                 )
             )
 
             return -target_alignment(
-                list(self._training_features[subset]),
-                list(self._training_classes[subset]),
+                list(self._training_X[subset]),
+                list(self._training_y[subset]),
                 lambda x1, x2: self._create_kernel()(weights, x1, x2),
                 assume_normalized_kernel=True,
             )
@@ -1100,9 +1108,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
                 features_lists, classes
             )
 
-            accuracy: float = self.score(
-                self._validation_features, self._validation_classes
-            )
+            accuracy: float = self.score(self._validation_X, self._validation_y)
 
             if self._debug_flag:
                 print(
@@ -1155,6 +1161,3 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             the returned object is `np.ndarray` with `dtype=bool`.
         """
         return self._classifier.predict(features_lists)
-
-
-

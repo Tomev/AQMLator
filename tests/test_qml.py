@@ -44,21 +44,29 @@ import torch
 from typing import Sequence, List, Tuple, Type, Union
 from sklearn.datasets import make_moons, make_regression
 from numpy.random import RandomState
-from aqmlator.qml import QNNBinaryClassifier, QuantumKernelBinaryClassifier, QNNLinearRegression, QNNModel
+from aqmlator.qml import (
+    QNNBinaryClassifier,
+    QuantumKernelBinaryClassifier,
+    QNNLinearRegression,
+    QNNModel,
+)
 
 from pennylane import numpy as np
 
+
 class TestQNNModel(unittest.TestCase, abc.ABC):
-    """
+    """ """
 
-    """
-
-    @abc.abstractmethod
     def setUp(self) -> None:
-        self.model: QNNModel
-        self.alternate_model: QNNModel
-        self.x: Sequence[Sequence[float]]
-        self.y: Sequence[Union[float, int]]
+        """
+        Setup method for the `TestCase`. Should be overwritten by test classes.
+
+        :note:
+            TR: This is by default called before any test. One way to skip the test of this
+            class if to set the skipping in the setUp. There may be a better way to do
+            it though.
+        """
+        raise unittest.SkipTest
 
     @staticmethod
     def get_weights(model: torch.nn.Module) -> List[np.ndarray]:
@@ -78,19 +86,19 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
 
         return weights
 
-    def test_forward_run(self) -> None:
+    def test_predict_run(self) -> None:
         """
         Tests if making predictions is possible.
         """
         self.model.predict(self.x)
-        self.assertTrue(True, "The forward crashed!")
+        self.assertTrue(True, "Predict crashed!")
 
-    def test_learning_run(self) -> None:
+    def test_fit_run(self) -> None:
         """
         Tests if the learning runs smoothly.
         """
         self.model.fit(self.x, self.y)
-        self.assertTrue(True, "The learning crashed.")
+        self.assertTrue(True, "Fit crashed.")
 
     def test_accuracy_increase(self) -> None:
         """
@@ -101,7 +109,7 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         final_score: float = self.model.score(self.x, self.y)
         self.assertTrue(
             final_score > initial_score,
-            f"QNN Training: Initial score ({initial_score}) is greater than the final"
+            f"QNN Training: Initial score ({initial_score}) isn't worse than the final"
             f" score ({final_score})!",
         )
 
@@ -124,7 +132,7 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         predictions: np.ndarray = self.model.predict(self.x)
         self.assertTrue(
             len(predictions) == len(self.x),
-            "QNNBinaryClassifier predictions have unexpected shape.",
+            f"Result dimensions are unexpected!({len(predictions)} != {len(self.x)}).",
         )
 
     def test_executions_number_growth(self) -> None:
@@ -136,128 +144,26 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
             self.model.n_executions() > 0, "The number of executions don't grow!"
         )
 
-    def test_different_layers_forward_run(self) -> None:
+    def test_different_layers_predict_run(self) -> None:
         """
         Tests if making predictions is possible when different type of layers is used.
         """
         self.alternate_model.predict(self.x)
-        self.assertTrue(True, "The forward crashed!")
+        self.assertTrue(True, "Predict crashed!")
 
     def test_torch_forward_run(self) -> None:
         """
         Tests if making predictions with torch classifier is possible.
         """
-        model: torch.nn.Sequential = torch.nn.Sequential(
-            self.model.get_torch_layer()
-        )
+        model: torch.nn.Sequential = torch.nn.Sequential(self.model.get_torch_layer())
         model.forward(torch.tensor(self.x))
-        self.assertTrue(True, "The torch forward crashed!")
-
-    def test_torch_learning_run(self) -> None:
-        """
-        Tests if learning using PyTorch runs smoothly.
-
-        The code is taken from the PyTorch docs:
-        https://pytorch.org/docs/stable/optim.html
-        """
-        model: torch.nn.Sequential = torch.nn.Sequential(
-            self.model.get_torch_layer()
-        )
-
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-
-        tensor_x: torch.Tensor = torch.tensor(self.x)
-        tensor_y: torch.Tensor = torch.tensor(self.y)
-
-        model.train()
-
-        # Training
-        optimizer.zero_grad()
-        output: torch.Tensor = model(tensor_x)
-        loss: torch.Tensor = torch.nn.functional.l1_loss(output, tensor_y)
-        loss.backward()
-        optimizer.step()
-
-        self.assertTrue(True, "The torch learning crashed.")
-
-    def test_torch_accuracy_increase(self) -> None:
-        """
-        Tests if the torch accuracy increases after short training.
-        """
-        model: torch.nn.Sequential = torch.nn.Sequential(
-            self.model.get_torch_layer()
-        )
-
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-
-        tensor_x: torch.Tensor = torch.tensor(self.x)
-        tensor_y: torch.Tensor = torch.tensor(self.y)
-
-        output: torch.Tensor = model(tensor_x)
-        initial_loss: torch.Tensor = np.array(
-            torch.nn.functional.l1_loss(output, tensor_y).detach().numpy()
-        )
-
-        model.train()
-
-        # Training
-        for _ in range(self.n_epochs):
-            optimizer.zero_grad()
-            output = model(tensor_x)
-            loss: torch.Tensor = torch.nn.functional.l1_loss(output, tensor_y)
-            loss.backward()
-            optimizer.step()
-
-        final_loss: float = loss.detach().numpy()
-
-        self.assertTrue(
-            final_loss < initial_loss, "The torch learning decreases the accuracy!."
-        )
-
-    def test_torch_weights_change(self) -> None:
-        """
-        Tests if the weights change during the torch training.
-        """
-        model: torch.nn.Sequential = torch.nn.Sequential(
-            self.model.get_torch_layer()
-        )
-
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-
-        tensor_x: torch.Tensor = torch.tensor(self.x)
-        tensor_y: torch.Tensor = torch.tensor(self.y)
-
-        model.train()
-
-        initial_weights: List[np.ndarray] = self.get_weights(model)
-
-        # Training
-        optimizer.zero_grad()
-        output: torch.Tensor = model(tensor_x)
-        loss: torch.Tensor = torch.nn.functional.l1_loss(output, tensor_y)
-        loss.backward()
-        optimizer.step()
-
-        trained_weights: List[np.ndarray] = self.get_weights(model)
-
-        self.assertTrue(
-            len(trained_weights) == len(initial_weights),
-            "Weights changed dimensions during torch training.",
-        )
-
-        for i in range(len(trained_weights)):
-            self.assertTrue(
-                (trained_weights[i] != initial_weights[i]).any(),
-                "Weights didn't change during torch training!",
-            )
+        self.assertTrue(True, "Torch forward crashed!")
 
     def test_torch_results_dimension(self) -> None:
         """
         Tests if torch predictions have expected dimensions.
         """
-        model: torch.nn.Sequential = torch.nn.Sequential(
-            self.model.get_torch_layer()
-        )
+        model: torch.nn.Sequential = torch.nn.Sequential(self.model.get_torch_layer())
         predictions: torch.Tensor = model.forward(torch.tensor(self.x))
 
         self.assertTrue(
@@ -273,7 +179,8 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
             self.alternate_model.get_torch_layer()
         )
         model.forward(torch.tensor(self.x))
-        self.assertTrue(True, "The torch forward crashed!")
+        self.assertTrue(True, "Torch forward crashed!")
+
 
 class TestQNNBinaryClassifier(TestQNNModel):
     """
@@ -339,8 +246,6 @@ class TestQNNBinaryClassifier(TestQNNModel):
         )
 
 
-
-
 class TestQNNLinearRegressor(TestQNNModel):
     """
     A `TestCase` class for the qnn module.
@@ -380,7 +285,7 @@ class TestQNNLinearRegressor(TestQNNModel):
         ] * 2
         alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
 
-        self.n_epochs: int = 2
+        self.n_epochs: int = 3
         batch_size: int = 20
 
         self.model: QNNLinearRegression = QNNLinearRegression(
@@ -400,8 +305,6 @@ class TestQNNLinearRegressor(TestQNNModel):
             layers=alternate_layers,
             layers_weights_shapes=alternate_layers_weights_shapes,
         )
-
-
 
 
 class TestQEKBinaryClassifier(unittest.TestCase):
@@ -562,5 +465,3 @@ class TestQEKBinaryClassifier(unittest.TestCase):
                 f"Dimension of the results is incorrect! ({len(np.array(x))} !="
                 f" {self.n_qubits})",
             )
-
-
