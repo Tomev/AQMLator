@@ -51,46 +51,7 @@ from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimiz
 from pennylane.kernels import target_alignment
 
 
-class MLModel(abc.ABC):
-    """
-    A boilerplate class, providing an interface for future ML models.
-    """
-
-    def __init__(
-        self,
-        optimizer: Optional[GradientDescentOptimizer] = None,
-    ):
-        """
-        A constructor for MLModel `class`.
-        :param optimizer:
-            An optimizer that will be used during the training.
-        """
-
-        if optimizer is None:
-            optimizer = NesterovMomentumOptimizer()
-
-        self.optimizer: GradientDescentOptimizer = optimizer
-        self.weights: Sequence[float]
-
-    @abc.abstractmethod
-    def fit(
-        self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
-    ) -> "MLModel":
-        """
-        The model training method.
-
-        :param features_lists:
-            The lists of features of the objects that are used during the training.
-        :param classes:
-            A list of classes corresponding to the given lists of features.
-
-        :return:
-            Returns self after training.
-        """
-        raise NotImplementedError
-
-
-class QMLModel(MLModel, abc.ABC):
+class QMLModel(abc.ABC):
     """
     A boilerplate class, providing an interface for future QML models.
     """
@@ -177,7 +138,11 @@ class QMLModel(MLModel, abc.ABC):
 
         self._validation_set_size: float = validation_set_size
 
-        super().__init__(optimizer)
+        if optimizer is None:
+            optimizer = NesterovMomentumOptimizer()
+
+        self.optimizer: GradientDescentOptimizer = optimizer
+        self.weights: Sequence[float]
 
     def n_executions(self) -> int:
         """
@@ -187,6 +152,29 @@ class QMLModel(MLModel, abc.ABC):
             Returns the number of times the quantum device was called.
         """
         return self._dev.num_executions
+
+    @abc.abstractmethod
+    def fit(
+        self,
+        features_lists: Sequence[Sequence[float]],
+        classes: Sequence[int],
+        dev: qml.Device,
+    ) -> "QMLModel":
+        """
+        The model training method.
+
+        :param features_lists:
+            The lists of features of the objects that are used during the training.
+        :param classes:
+            A list of classes corresponding to the given lists of features.
+        :param dev:
+            A quantum device on which the fitting should be performed. If `None` then
+            a new qml.Device will be initialised.
+
+        :return:
+            Returns self after training.
+        """
+        raise NotImplementedError
 
     def _prepare_default_embedding(self) -> None:
         """
@@ -453,7 +441,9 @@ class QNNModel(QMLModel, abc.ABC):
             Returns prediction value for the given problem.
         """
 
-    def fit(self, X: Sequence[Sequence[float]], y: Sequence[int]) -> "QNNModel":
+    def fit(
+        self, X: Sequence[Sequence[float]], y: Sequence[int], dev: qml.Device = None
+    ) -> "QNNModel":
         """
         The model training method.
 
@@ -463,11 +453,18 @@ class QNNModel(QMLModel, abc.ABC):
             The lists of features of the objects that are used during the training.
         :param y:
             A list of outputs corresponding to the given lists of features.
+        :param dev:
+            A quantum device on which the fitting should be performed. If `None` then
+            a new qml.Device will be initialised.
 
         :return:
             Returns `self` after training.
         """
-        self._dev = qml.device(self._device_string, wires=self.wires)
+        if not dev:
+            dev = qml.device(self._device_string, wires=self.wires)
+
+        self._dev = dev
+
         self._circuit = self._create_circuit()
 
         self._split_data_for_training(X, y)
@@ -1204,3 +1201,205 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             the returned object is `np.ndarray` with `dtype=bool`.
         """
         return self._classifier.predict(features_lists)
+
+
+class QuantumClassifier(QMLModel, ClassifierMixin):
+    """
+    This class implements a quantum classifier based on the multiple binary quantum
+    classifiers.
+    """
+
+    def __init__(
+        self,
+        wires: Union[int, Sequence[int]],
+        n_classes: int,
+        binary_classifiers: Optional[Sequence[QNNBinaryClassifier]] = None,
+        batch_size: int = 10,
+        accuracy_threshold: float = 0.8,
+        device_string: str = "lightning.qubit",
+        optimizer: Optional[GradientDescentOptimizer] = None,
+        embedding_method: Optional[Type[qml.operation.Operation]] = None,
+        embedding_kwargs: Optional[Dict[str, Any]] = None,
+        layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
+        layers_weights_shapes: Optional[Sequence[Tuple[int, ...]]] = None,
+        validation_set_size: float = 0.2,
+        rng_seed: int = 42,
+    ) -> None:
+        """
+        The constructor for the `QuantumClassifier` class.
+
+        :param wires:
+            The wires to use in the VQC or the number of qubits (and wires) used in the
+            VQC. It will be used in the `qml.Device` specification.
+        :param n_classes:
+            The number of classes in the classification task.
+        :param binary_classifiers:
+            Binary classifiers that will be used in the classification. If `None` is
+            given, then the `QuantumClassifier` will produce default binary classifiers.
+        :param batch_size:
+            Batch size using during binary classifiers fitting.
+        :param accuracy_threshold:
+            The target minimal accuracy of the classifier. Note that it reflects total
+            accuracy of the classifier, which is lower than accuracy of each binary
+            classifier.
+        :param device_string:
+            A string naming the device used to run the VQCs.
+        :param optimizer:
+            The optimizer that will be used in the training. `NesterovMomentumOptimizer`
+            with default parameters will be used as default. It will be used in each of
+            the binary classifiers initialized by `QuantumClassifier`.
+        :param embedding_method:
+            Embedding method of the data. By default - when `None` is specified - the
+            QMLModel will use `AngleEmbedding`. See `_prepare_default_embedding`
+            for parameters details. It will be used in each of the binary classifiers
+            initialized by `QuantumClassifier`.
+        :param embedding_kwargs:
+            Keyword arguments for the embedding method. If `None` are specified the
+            QMLModel will use the default embedding method. It will be used in each of
+            the binary classifiers initialized by `QuantumClassifier`.
+        :param layers:
+            Layers to be used in the VQC. The layers will be applied in the given order.
+            A double `StronglyEntanglingLayer` will be used if `None` is given.
+        :param layers_weights_shapes:
+            The shapes of the corresponding layers. Note that the default layers setup
+            will be used if `None` is given. It will be used in each of the binary
+            classifiers initialized by `QuantumClassifier`.
+        :param validation_set_size:
+            A part of the training set that will be used for QMLModel validation.
+            It should be from (0, 1). It will be used in each of the binary classifiers.
+        :param rng_seed:
+            A seed used for random weights initialization.
+        """
+        super().__init__(
+            wires,
+            device_string,
+            optimizer,
+            embedding_method,
+            embedding_kwargs,
+            layers,
+            layers_weights_shapes,
+            validation_set_size,
+            rng_seed,
+        )
+
+        self.accuracy_threshold: float = accuracy_threshold
+        self.n_classes = n_classes
+
+        if not binary_classifiers:
+            binary_classifiers = self._prepare_default_binary_classifiers(batch_size)
+
+        self._binary_classifiers: Sequence[QNNBinaryClassifier] = binary_classifiers
+
+    def _prepare_default_binary_classifiers(
+        self, batch_size: int
+    ) -> List[QNNBinaryClassifier]:
+        """
+        Prepares as set od default binary classifiers with the parameters specified
+        during the class initialization.
+
+        :param batch_size:
+            Batch size to be used in the initialized binary classifiers.
+
+        :return:
+            List of the `QNNBinaryClassifier`s initialized with the given parameters.
+        """
+        binary_classifiers: List[QNNBinaryClassifier] = []
+
+        for _ in range(self.n_classes):
+            binary_classifiers.append(
+                QNNBinaryClassifier(
+                    wires=self.wires,
+                    batch_size=batch_size,
+                    embedding_method=self._embedding_method,
+                    embedding_kwargs=self._embedding_kwargs,
+                    layers=self._layers,
+                    layers_weights_shapes=self._layers_weights_shapes,
+                    validation_set_size=self._validation_set_size,
+                )
+            )
+
+        return binary_classifiers
+
+    def fit(
+        self,
+        features_lists: Sequence[Sequence[float]],
+        classes: Sequence[int],
+        dev: qml.Device = None,
+    ) -> "QuantumClassifier":
+        """
+        The model training method. Essentially, it fits every binary classifier to the
+        respective class.
+
+        :param X:
+            The lists of features of the objects that are used during the training.
+        :param y:
+            A list of outputs corresponding to the given lists of features.
+        :param dev:
+            A quantum device on which the fitting should be performed. If `None` then
+            a new qml.Device will be initialised.
+
+        :return:
+            Returns `self` after training.
+        """
+
+        if not dev:
+            dev = qml.device(self._device_string, wires=self.wires)
+
+        self._dev = dev
+
+        # Check if there's a binary classifier for each class.
+        unique_classes: np.ndarray = np.unique(classes)
+
+        if len(unique_classes) > len(self._binary_classifiers):
+            raise Exception(
+                "Numbers of provided binary classifiers and classes don't match!"
+            )
+
+        binary_classifier_accuracy_threshold: float = np.sqrt(self.accuracy_threshold)
+
+        for classifier in self._binary_classifiers:
+            classifier._accuracy_threshold = binary_classifier_accuracy_threshold
+
+        # Fit each binary classifier to its respective class.
+        for i, binary_classifier in enumerate(self._binary_classifiers):
+            classifier_classes = np.array(classes)
+            classifier_classes[classifier_classes != unique_classes[i]] = -1
+            classifier_classes[classifier_classes == unique_classes[i]] = 1
+
+            binary_classifier.fit(features_lists, classifier_classes, self._dev)
+
+        return self
+
+    def predict(
+        self, features: Sequence[Sequence[float]]
+    ) -> Union[Sequence[float], Sequence[int]]:
+        """
+        Returns predictions of the model for the given features. In the case of
+        `QuantumClassifier`, for given features, the predicted class corresponds to the
+        index of the binary classifier which returns the highest expectation value of
+        the `PauliZ` measurement on the first qubit.
+
+        :param features:
+            Features of the objects for which the model will predict the values.
+        :return:
+            Values predicted for given features.
+        """
+        predictions: List[int] = []
+
+        for x in features:
+
+            max_expectation: float = 0
+            current_class: int = 0
+
+            for i, classifier in enumerate(self._binary_classifiers):
+                expectation: float = classifier.get_circuit_expectation_values([x])[0][
+                    0
+                ]
+
+                if expectation > max_expectation:
+                    max_expectation = expectation
+                    current_class = i
+
+            predictions.append(current_class)
+
+        return predictions

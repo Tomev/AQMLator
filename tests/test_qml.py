@@ -41,21 +41,23 @@ from pennylane.measurements import ExpectationMP
 
 import torch
 
-from typing import Sequence, List, Tuple, Type, Union
-from sklearn.datasets import make_moons, make_regression
+from typing import Sequence, List, Tuple, Type
+from sklearn.datasets import make_moons, make_regression, make_classification
 from numpy.random import RandomState
 from aqmlator.qml import (
     QNNBinaryClassifier,
     QuantumKernelBinaryClassifier,
     QNNLinearRegression,
-    QNNModel,
+    QuantumClassifier,
 )
 
 from pennylane import numpy as np
 
 
 class TestQNNModel(unittest.TestCase, abc.ABC):
-    """ """
+    """
+    A general `unittest.TestCase` class for QNN based QML models.
+    """
 
     def setUp(self) -> None:
         """
@@ -465,3 +467,74 @@ class TestQEKBinaryClassifier(unittest.TestCase):
                 f"Dimension of the results is incorrect! ({len(np.array(x))} !="
                 f" {self.n_qubits})",
             )
+
+
+class TestQuantumClassifier(unittest.TestCase):
+    def setUp(self) -> None:
+        """
+        Sets up the tests.
+        """
+
+        self.n_samples: int = 50
+        seed: int = 0
+        n_classes: int = 3
+        n_epochs: int = 2
+        batch_size: int = 10
+        n_features: int = 2
+
+        self.X: Sequence[Sequence[float]]
+        self.y: Sequence[int]
+
+        self.X, self.y = make_classification(
+            n_samples=self.n_samples,
+            n_features=n_features,
+            n_classes=n_classes,
+            n_redundant=0,
+            n_clusters_per_class=1,
+            random_state=RandomState(seed),
+        )
+
+        classifiers: List[QNNBinaryClassifier] = [
+            QNNBinaryClassifier(
+                wires=n_features, batch_size=batch_size, n_epochs=n_epochs
+            )
+            for _ in range(n_classes)
+        ]
+
+        self.classifier: QuantumClassifier = QuantumClassifier(
+            wires=2, binary_classifiers=classifiers, n_classes=n_classes
+        )
+
+    def test_predict_run(self) -> None:
+        """
+        Tests if making predictions is possible.
+        """
+        self.classifier.predict(self.X)
+        self.assertTrue(True)
+
+    def test_fit_run(self) -> None:
+        """
+        Tests if classifier fitting is possible.
+        """
+        self.classifier.fit(self.X, self.y)
+        self.assertTrue(True)
+
+    def test_results_dimensions(self) -> None:
+        """
+        Tests if the dimension of the results returned by the classifier is correct.
+        """
+        results: Sequence[int] = self.classifier.predict(self.X)
+        self.assertTrue(len(results) == self.n_samples)
+
+    def test_accuracy_increase(self) -> None:
+        """
+        Tests if the classifier accuracy increase after the training.
+        """
+        initial_accuracy: float = (
+            sum(self.classifier.predict(self.X) == self.y) / self.n_samples
+        )
+        self.classifier.fit(self.X, self.y)
+        final_accuracy: float = (
+            sum(self.classifier.predict(self.X) == self.y) / self.n_samples
+        )
+        self.assertTrue(initial_accuracy < final_accuracy)
