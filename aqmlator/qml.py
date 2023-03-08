@@ -1213,7 +1213,7 @@ class QuantumClassifier(QMLModel, ClassifierMixin):
         self,
         wires: Union[int, Sequence[int]],
         n_classes: int,
-        binary_classifiers: Optional[Sequence[QNNBinaryClassifier]],
+        binary_classifiers: Optional[Sequence[QNNBinaryClassifier]] = None,
         batch_size: int = 10,
         accuracy_threshold: float = 0.8,
         device_string: str = "lightning.qubit",
