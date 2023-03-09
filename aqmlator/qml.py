@@ -397,6 +397,9 @@ class QNNModel(QMLModel, abc.ABC):
             VQC.
         """
 
+        if not self._circuit:
+            self._circuit = self._create_circuit()
+
         expectation_values: List[Sequence[float]] = []
 
         for i, features in enumerate(features_lists):
@@ -522,6 +525,10 @@ class QNNModel(QMLModel, abc.ABC):
 
         self.weights = best_weights
 
+        # TR: Required for proper serialization.
+        # TODO TR:  Maybe there's a better way to do it
+        self._circuit = None
+
         return self
 
     def _prepare_torch_inputs(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -563,7 +570,18 @@ class QNNModel(QMLModel, abc.ABC):
         :return:
             Values predicted for given features.
         """
-        return self._prediction_function(self.get_circuit_expectation_values(features))
+
+        self._circuit = self._create_circuit()
+
+        results: Union[Sequence[float], Sequence[int]] = self._prediction_function(
+            self.get_circuit_expectation_values(features)
+        )
+
+        # TR: Required for proper serialization.
+        # TODO TR:  Maybe there's a better way to do it
+        self._circuit = None
+
+        return results
 
 
 class QNNBinaryClassifier(QNNModel, ClassifierMixin):
@@ -674,6 +692,9 @@ class QNNBinaryClassifier(QNNModel, ClassifierMixin):
         :return:
             The value of the square loss function.
         """
+
+        self._circuit = self._create_circuit()
+
         expectation_values: np.ndarray = np.array(
             [self._circuit(x, weights)[0] for x in X]
         )
@@ -799,6 +820,8 @@ class QNNLinearRegression(QNNModel, RegressorMixin):
         :return:
             The value of the square loss function.
         """
+        self._circuit = self._create_circuit()
+
         expected_values = [self._circuit(x, weights) for x in X]
 
         predicted_values: np.ndarray = np.array(
@@ -807,6 +830,7 @@ class QNNLinearRegression(QNNModel, RegressorMixin):
                 for x in expected_values
             ]
         )
+
         return np.mean(predicted_values - np.array(y) ** 2)
 
     def _default_prediction_function(
@@ -1057,6 +1081,32 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         return kernel
 
+    def _kernel_matrix_function(
+        self, x: Sequence[Sequence[float]], y: Sequence[int]
+    ) -> Callable[[Sequence[float], Sequence[float]], float]:
+        """
+        Prepares and returns the `kernel_matrix` function that uses the
+        trained kernel.
+
+        :param x:
+            The lists of features of the objects that are used during the
+            training.
+        :param y:
+            The classes corresponding to the given features.
+
+        :return:
+            The `kernel_matrix` function that uses the trained kernel.
+        """
+        kernel: Callable[
+            [Sequence[float], Sequence[float], Sequence[float]], float
+        ] = self._create_kernel()
+
+        return qml.kernels.kernel_matrix(
+            list(x),
+            list(y),
+            lambda x1, x2: kernel(self.weights, x1, x2),
+        )
+
     def fit(
         self, features_lists: Sequence[Sequence[float]], classes: Sequence[int]
     ) -> "QuantumKernelBinaryClassifier":
@@ -1122,29 +1172,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             )
 
             # Second create a kernel matrix function using the trained kernel.
-            def kernel_matrix_function(
-                x: Sequence[Sequence[float]], y: Sequence[int]
-            ) -> Callable[[Sequence[float], Sequence[float]], float]:
-                """
-                Prepares and returns the `kernel_matrix` function that uses the
-                trained kernel.
-
-                :param x:
-                    The lists of features of the objects that are used during the
-                    training.
-                :param y:
-                    The classes corresponding to the given features.
-
-                :return:
-                    The `kernel_matrix` function that uses the trained kernel.
-                """
-                return qml.kernels.kernel_matrix(
-                    list(x),
-                    list(y),
-                    lambda x1, x2: kernel(self.weights, x1, x2),
-                )
-
-            self._classifier = SVC(kernel=kernel_matrix_function).fit(
+            self._classifier = SVC(kernel=self._kernel_matrix_function).fit(
                 features_lists, classes
             )
 
@@ -1288,6 +1316,8 @@ class QuantumClassifier(QMLModel, ClassifierMixin):
         if not binary_classifiers:
             binary_classifiers = self._prepare_default_binary_classifiers(batch_size)
 
+        self._circuit = None
+
         self._binary_classifiers: Sequence[QNNBinaryClassifier] = binary_classifiers
 
     def _prepare_default_binary_classifiers(
@@ -1361,12 +1391,14 @@ class QuantumClassifier(QMLModel, ClassifierMixin):
             classifier._accuracy_threshold = binary_classifier_accuracy_threshold
 
         # Fit each binary classifier to its respective class.
-        for i, binary_classifier in enumerate(self._binary_classifiers):
+        for i in range(len(self._binary_classifiers)):
             classifier_classes = np.array(classes)
             classifier_classes[classifier_classes != unique_classes[i]] = -1
             classifier_classes[classifier_classes == unique_classes[i]] = 1
 
-            binary_classifier.fit(features_lists, classifier_classes, self._dev)
+            self._binary_classifiers[i].fit(
+                features_lists, classifier_classes, self._dev
+            )
 
         return self
 
@@ -1401,5 +1433,8 @@ class QuantumClassifier(QMLModel, ClassifierMixin):
                     current_class = i
 
             predictions.append(current_class)
+
+        for classifier in self._binary_classifiers:
+            classifier._circuit = None
 
         return predictions

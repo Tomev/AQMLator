@@ -33,7 +33,9 @@ __author__ = "Tomasz Rybotycki"
 
 import unittest
 import abc
+import os
 
+import dill
 import pennylane
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
@@ -43,8 +45,10 @@ import torch
 
 from typing import Sequence, List, Tuple, Type
 from sklearn.datasets import make_moons, make_regression, make_classification
+from numpy import isclose
 from numpy.random import RandomState
 from aqmlator.qml import (
+    QNNModel,
     QNNBinaryClassifier,
     QuantumKernelBinaryClassifier,
     QNNLinearRegression,
@@ -69,6 +73,10 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
             it though.
         """
         raise unittest.SkipTest
+
+    def tearDown(self) -> None:
+        if os.path.isfile("qml_test.dil"):
+            os.remove("qml_test.dil")
 
     @staticmethod
     def get_weights(model: torch.nn.Module) -> List[np.ndarray]:
@@ -152,6 +160,39 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         """
         self.alternate_model.predict(self.x)
         self.assertTrue(True, "Predict crashed!")
+
+    def test_initial_serialization(self) -> None:
+        """
+        Tests if the model is serializable after the initialization.
+
+        :note:
+            This method can be (and is) used to check if the modified model is
+            serializable.
+        """
+
+        model_score: float = self.model.score(self.x, self.y)
+
+        with open("qml_test.dil", "wb") as f:
+            dill.dump(self.model, f)
+
+        with open("qml_test.dil", "rb") as f:
+            loaded_model: QNNModel = dill.load(f)
+
+        self.assertTrue(isclose(model_score, loaded_model.score(self.x, self.y)))
+
+    def test_post_fit_serialization(self) -> None:
+        """
+        Tests if the model is serializable after fit.
+        """
+        self.model.fit(self.x, self.y)
+        self.test_initial_serialization()
+
+    def test_post_prediction_serialization(self) -> None:
+        """
+        Tests if the model is serializable after making prediction.
+        """
+        self.model.predict(self.x)
+        self.test_initial_serialization()
 
     def test_torch_forward_run(self) -> None:
         """
@@ -371,6 +412,10 @@ class TestQEKBinaryClassifier(unittest.TestCase):
             )
         )
 
+    def tearDown(self) -> None:
+        if os.path.isfile("qml_test.dil"):
+            os.remove("qml_test.dil")
+
     def test_learning_and_predict_run(self) -> None:
         """
         Tests if fitting and making predictions is possible.
@@ -468,6 +513,40 @@ class TestQEKBinaryClassifier(unittest.TestCase):
                 f" {self.n_qubits})",
             )
 
+    def _test_serialization(self) -> None:
+        """
+        Tests if the model is serializable after the initialization.
+
+        :note:
+            This method can be (and is) used to check if the modified model is
+            serializable.
+        """
+
+        model_score: float = self.classifier.score(self.x, self.y)
+
+        with open("qml_test.dil", "wb") as f:
+            dill.dump(self.classifier, f)
+
+        with open("qml_test.dil", "rb") as f:
+            loaded_model: QNNModel = dill.load(f)
+
+        self.assertTrue(isclose(model_score, loaded_model.score(self.x, self.y)))
+
+    def test_post_fit_serialization(self) -> None:
+        """
+        Tests if the model is serializable after fit.
+        """
+        self.classifier.fit(self.x, self.y)
+        self._test_serialization()
+
+    def test_post_fit_prediction_serialization(self) -> None:
+        """
+        Tests if the model is serializable after making prediction.
+        """
+        self.classifier.fit(self.x, self.y)
+        self.classifier.predict(self.x)
+        self._test_serialization()
+
 
 class TestQuantumClassifier(unittest.TestCase):
     def setUp(self) -> None:
@@ -505,6 +584,10 @@ class TestQuantumClassifier(unittest.TestCase):
             wires=2, binary_classifiers=classifiers, n_classes=n_classes
         )
 
+    def tearDown(self) -> None:
+        if os.path.isfile("qml_test.dil"):
+            os.remove("qml_test.dil")
+
     def test_predict_run(self) -> None:
         """
         Tests if making predictions is possible.
@@ -538,3 +621,36 @@ class TestQuantumClassifier(unittest.TestCase):
             sum(self.classifier.predict(self.X) == self.y) / self.n_samples
         )
         self.assertTrue(initial_accuracy < final_accuracy)
+
+    def test_initial_serialization(self) -> None:
+        """
+        Tests if the model is serializable after the initialization.
+
+        :note:
+            This method can be (and is) used to check if the modified model is
+            serializable.
+        """
+
+        model_score: float = self.classifier.score(self.X, self.y)
+
+        with open("qml_test.dil", "wb") as f:
+            dill.dump(self.classifier, f)
+
+        with open("qml_test.dil", "rb") as f:
+            loaded_model: QNNModel = dill.load(f)
+
+        self.assertTrue(isclose(model_score, loaded_model.score(self.X, self.y)))
+
+    def test_post_fit_serialization(self) -> None:
+        """
+        Tests if the model is serializable after fit.
+        """
+        self.classifier.fit(self.X, self.y)
+        self.test_initial_serialization()
+
+    def test_post_prediction_serialization(self) -> None:
+        """
+        Tests if the model is serializable after making prediction.
+        """
+        self.classifier.predict(self.X)
+        self.test_initial_serialization()
