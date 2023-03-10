@@ -118,7 +118,6 @@ class TestDataPreprocessing(unittest.TestCase):
 
         # Ensure that the original data wasn't transformed in the process.
         for i in range(len(fitted_data)):
-
             self.assertFalse(
                 fitted_data[i] == data[i],
                 "Original data was transformed in the process!",

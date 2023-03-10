@@ -38,12 +38,12 @@ class TestDataAcquisition(unittest.TestCase):
             for i in range(len(csv_data_targets))
         ]
 
-        with open("learning_data.csv", "w") as f:
+        with open("learning_data.csv", "w", newline="") as f:
             writer = csv.writer(f, "excel")
             for data in csv_learning_data:
                 writer.writerow(data)
 
-        with open("supervised_learning_data.csv", "w") as f:
+        with open("supervised_learning_data.csv", "w", newline="") as f:
             writer = csv.writer(f, "excel")
             for i in range(len(csv_data_targets)):
                 writer.writerow(csv_learning_data[i] + [csv_data_targets[i]])

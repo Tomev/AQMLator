@@ -34,9 +34,9 @@ import unittest
 
 from typing import Sequence
 
-from aqmlator.tuner import ModelFinder, HyperparameterTuner
+from aqmlator.tuner import ModelFinder, HyperparameterTuner, MLTaskType
 from aqmlator.qml import QNNBinaryClassifier
-from sklearn.datasets import make_moons
+from sklearn.datasets import make_moons, make_regression, make_classification
 from numpy.random import RandomState
 
 
@@ -64,20 +64,85 @@ class TestModelFinder(unittest.TestCase):
             random_state=RandomState(0),
         )
 
+        reg_x, reg_y = make_regression(
+            n_samples=10,
+            n_features=2,
+            n_informative=2,
+            n_targets=1,
+            random_state=RandomState(0),
+        )
+
+        cls_x, cls_y = make_classification(
+            n_samples=10,
+            n_features=2,
+            n_informative=2,
+            n_redundant=0,
+            n_repeated=0,
+            n_classes=3,
+            n_clusters_per_class=1,
+            random_state=RandomState(0),
+        )
+
         n_seeds: int = 2
         n_trials: int = 4
         n_epochs: int = 3
 
-        self.model_finder: ModelFinder = ModelFinder(
-            0, x, y, n_cores=1, n_trials=n_trials, n_seeds=n_seeds, n_epochs=n_epochs
+        self.binary_classifier_finder: ModelFinder = ModelFinder(
+            task_type=MLTaskType.BINARY_CLASSIFICATION,
+            features=x,
+            classes=y,
+            n_cores=1,
+            n_trials=n_trials,
+            n_seeds=n_seeds,
+            n_epochs=n_epochs,
         )
 
-    def test_model_finder_running(self) -> None:
+        self.classifier_finder: ModelFinder = ModelFinder(
+            task_type=MLTaskType.CLASSIFICATION,
+            features=cls_x,
+            classes=cls_y,
+            n_cores=1,
+            n_trials=n_trials,
+            n_seeds=n_seeds,
+            n_epochs=n_epochs,
+        )
+
+        self.linear_regressor_finder: ModelFinder = ModelFinder(
+            task_type=MLTaskType.REGRESSION,
+            features=reg_x,
+            classes=reg_y,
+            n_cores=1,
+            n_trials=n_trials,
+            n_seeds=n_seeds,
+            n_epochs=n_epochs,
+        )
+
+    def test_binary_classification_model_finding(self) -> None:
         """
-        Tests if `ModelFinder` runs.
+        Tests if `ModelFinder` finds a binary classification model.
         """
-        self.model_finder.find_model()
-        self.assertTrue(True, "ModelFinder crashed while finding the model!")
+        self.binary_classifier_finder.find_model()
+        self.assertTrue(
+            True, "ModelFinder crashed while finding a binary classification model!"
+        )
+
+    def test_classification_model_finding(self) -> None:
+        """
+        Tests if `ModelFinder` finds a linear regression model.
+        """
+        self.classifier_finder.find_model()
+        self.assertTrue(
+            True, "ModelFinder crashed while finding a classification model!"
+        )
+
+    def test_linear_regression_model_finding(self) -> None:
+        """
+        Tests if `ModelFinder` finds a linear regression model.
+        """
+        self.linear_regressor_finder.find_model()
+        self.assertTrue(
+            True, "ModelFinder crashed while finding a linear regression model!"
+        )
 
 
 class TestHyperparameterTuner(unittest.TestCase):
