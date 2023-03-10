@@ -158,7 +158,7 @@ class QMLModel(abc.ABC):
         self,
         features_lists: Sequence[Sequence[float]],
         classes: Sequence[int],
-        dev: qml.Device,
+        dev: Optional[qml.Device] = None,
     ) -> "QMLModel":
         """
         The model training method.
