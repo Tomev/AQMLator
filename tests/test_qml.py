@@ -52,7 +52,7 @@ from aqmlator.qml import (
     QNNBinaryClassifier,
     QuantumKernelBinaryClassifier,
     QNNLinearRegression,
-    QuantumClassifier,
+    QNNClassifier,
 )
 
 from pennylane import numpy as np
@@ -580,7 +580,7 @@ class TestQuantumClassifier(unittest.TestCase):
             for _ in range(n_classes)
         ]
 
-        self.classifier: QuantumClassifier = QuantumClassifier(
+        self.classifier: QNNClassifier = QNNClassifier(
             wires=2, binary_classifiers=classifiers, n_classes=n_classes
         )
 
