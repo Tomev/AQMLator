@@ -207,7 +207,9 @@ class ModelFinder(OptunaOptimizer):
 
         self._linear_regressors_kwargs_generator: List[
             Callable[[optuna.trial.Trial], Dict[str, Any]]
-        ] = []
+        ] = [
+            self._get_qnn_based_model_kwargs,
+        ]
 
         self._embeddings: List[Type[pennylane.operation.Operation]] = [
             AmplitudeEmbedding,
