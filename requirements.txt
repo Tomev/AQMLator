@@ -8,4 +8,4 @@ torchvision
 torchaudio
 matplotlib
 optuna
-
+psycopg2

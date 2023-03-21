@@ -39,7 +39,7 @@ import pennylane
 import pennylane.numpy as np
 
 from optuna.samplers import TPESampler
-from typing import Sequence, List, Dict, Any, Tuple, Type, Callable
+from typing import Sequence, List, Dict, Any, Tuple, Type, Callable, Optional
 from enum import IntEnum
 
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
@@ -57,6 +57,8 @@ from aqmlator.qml import (
     QNNLinearRegression,
     QNNClassifier,
 )
+
+import aqmlator.database_connection as db
 
 
 class MLTaskType(IntEnum):
@@ -133,7 +135,9 @@ class OptunaOptimizer(abc.ABC):
         self._n_trials: int = n_trials
         self._n_cores: int = n_cores
         self._n_seeds: int = n_seeds
-        pass
+
+    def _get_storage(self) -> Optional[str]:
+        return db.database_url
 
 
 class ModelFinder(OptunaOptimizer):
@@ -243,7 +247,10 @@ class ModelFinder(OptunaOptimizer):
         )
 
         study: optuna.study.Study = optuna.create_study(
-            sampler=sampler, study_name=self._study_name, load_if_exists=True
+            sampler=sampler,
+            study_name=self._study_name,
+            load_if_exists=True,
+            storage=self._get_storage(),
         )
 
         study.optimize(
@@ -567,7 +574,10 @@ class HyperparameterTuner(OptunaOptimizer):
         )
 
         study: optuna.study.Study = optuna.create_study(
-            sampler=sampler, study_name=self._study_name, load_if_exists=True
+            sampler=sampler,
+            study_name=self._study_name,
+            load_if_exists=True,
+            storage=self._get_storage(),
         )
 
         study.optimize(
