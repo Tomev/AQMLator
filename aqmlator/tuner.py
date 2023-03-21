@@ -139,6 +139,7 @@ class OptunaOptimizer(abc.ABC):
     def _get_storage(self) -> Optional[str]:
         return db.database_url
 
+
 class ModelFinder(OptunaOptimizer):
     """
     A class for finding the best QNN model for given data and task.
@@ -246,8 +247,10 @@ class ModelFinder(OptunaOptimizer):
         )
 
         study: optuna.study.Study = optuna.create_study(
-            sampler=sampler, study_name=self._study_name, load_if_exists=True,
-            storage=self._get_storage()
+            sampler=sampler,
+            study_name=self._study_name,
+            load_if_exists=True,
+            storage=self._get_storage(),
         )
 
         study.optimize(
@@ -571,8 +574,10 @@ class HyperparameterTuner(OptunaOptimizer):
         )
 
         study: optuna.study.Study = optuna.create_study(
-            sampler=sampler, study_name=self._study_name, load_if_exists=True,
-            storage=self._get_storage()
+            sampler=sampler,
+            study_name=self._study_name,
+            load_if_exists=True,
+            storage=self._get_storage(),
         )
 
         study.optimize(
