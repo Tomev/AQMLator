@@ -9,3 +9,4 @@ torchaudio
 matplotlib
 optuna
 psycopg2
+optuna-dashboard

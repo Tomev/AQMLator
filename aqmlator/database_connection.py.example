@@ -30,4 +30,4 @@
 
 __author__ = "Tomasz Rybotycki"
 
-database_url: str = "postgresql://localhost/mydb"
+database_url: str = "postgresql://user:password@localhost/mydb"
