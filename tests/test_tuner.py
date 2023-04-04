@@ -1,7 +1,7 @@
 """
 =============================================================================
 
-    This module contains tests for the classes in tuner.py.
+    This module contains tests for the functionalities in the tuner module.
 
 =============================================================================
 
