@@ -137,7 +137,7 @@ class OptunaOptimizer(abc.ABC):
         self._n_seeds: int = n_seeds
 
     def _get_storage(self) -> Optional[str]:
-        return db.database_url
+        return db.get_database_url()
 
 
 class ModelFinder(OptunaOptimizer):
