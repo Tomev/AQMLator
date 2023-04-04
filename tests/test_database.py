@@ -1,7 +1,7 @@
 """
 =============================================================================
 
-    This module contains a method for generating the database url.
+    This module contains tests for the functionalities in the database module.
 
 =============================================================================
 
@@ -30,7 +30,33 @@
 
 __author__ = "Tomasz Rybotycki"
 
-database_url: str = "postgresql://user:password@localhost/mydb"
+import os
+import unittest
 
-def get_database_url() -> str:
-    return database_url
+from aqmlator.database import export_data_to_sqlite_database
+
+
+class TestDatabaseFunctionalities(unittest.TestCase):
+    """
+    A `TestCase` class for the functionalities in the `database` module.
+    """
+
+    def setUp(self) -> None:
+        """
+        Sets up the class for the tests.
+        """
+        self.sqlite_db_name: str = "aqmlatorSQLite.db"
+
+    def tearDown(self) -> None:
+        """
+        Cleans up after tests.
+        """
+        if os.path.exists(self.sqlite_db_name):
+            os.remove(self.sqlite_db_name)
+
+    def test_exporting_to_sqlite_database(self) -> None:
+        """
+        Checks if the SQLite database is properly created.
+        """
+        export_data_to_sqlite_database(self.sqlite_db_name)
+        self.assertTrue(os.path.exists(self.sqlite_db_name))

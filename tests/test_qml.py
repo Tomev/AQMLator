@@ -1,7 +1,7 @@
 """
 =============================================================================
 
-    This module contains ...
+    This module contains tests for the functionalities in the qml module.
 
 =============================================================================
 
