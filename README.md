@@ -11,3 +11,6 @@ application. By default, it can be run using the following command
 `optuna-dashboard postgresql://user:password@localhost/mydb`
 
 while the (PostgreSQL) database is running.
+
+Alternatively, one can use `aqmlator.database.export_data_to_sqlite_database` to export
+the data to the SQLite database, and handle it as one pleases.
