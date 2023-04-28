@@ -70,6 +70,50 @@ regressors: Dict[str, Dict[str, Any]] = {
     }
 }
 
+data_embeddings: Dict[str, Dict[str, Any]] = {
+    "ANGLE": {
+
+    },
+    "AMPLITUDE": {
+
+    }
+}
+
+optimizers: Dict[str, Dict[str, Any]] = {
+    "NESTEROV": {
+        "constructor": NesterovMomentumOptimizer,
+        # Hyperparameters range taken from
+        # https://cs231n.github.io/neural-networks-3/
+        "kwargs": {
+            "stepsize": {
+                "min": 0.00001,
+                "max": 0.1
+            },
+            "momentum": {
+                "min": 0.5,
+                "max": 0.9
+            }
+        }
+    },
+    "ADAM": {
+        "constructor": AdamOptimizer,
+        # Hyperparameters range taken from arXiv:1412.6980.
+        "kwargs": {
+            "stepsize": {
+                "min": 0.00001,
+                "max": 0.1,
+            },
+            "beta1": {
+                "min": 0,
+                "max": 0.9,
+            },
+            "beta2": {
+                "min": 0.99,
+                "max": 0.9999
+            }
+        }
+    }
+}
 
 class MLTaskType(StrEnum):
     BINARY_CLASSIFICATION: str = auto()
@@ -90,11 +134,6 @@ class DataEmbedding(StrEnum):
 class Layers(StrEnum):
     BASIC: str = "BASIC"
     STRONGLY_ENTANGLING: str = "STRONGLY_ENTANGLING"
-
-
-class Optimizers(StrEnum):
-    NESTEROV: str = "NESTEROV"
-    ADAM: str = "ADAM"
 
 
 class OptunaOptimizer(abc.ABC):
@@ -512,9 +551,10 @@ class ModelFinder(OptunaOptimizer):
         :return:
             A dictionary with fields required for proper `QNNModel`  construction.
         """
-        kwargs: Dict[str, Any] = {"wires": len(self._x[0])}
-        kwargs["n_layers"] = trial.suggest_int("n_layers" + self._optuna_postfix, 1, 3)
-        kwargs["batch_size"] = self._batch_size
+        kwargs: Dict[str, Any] = {
+            "wires": len(self._x[0]),
+            "n_layers": trial.suggest_int("n_layers" + self._optuna_postfix, 1, 3),
+            "batch_size": self._batch_size}
 
         return kwargs
 
@@ -582,11 +622,6 @@ class HyperparameterTuner(OptunaOptimizer):
             features, classes, study_name, add_uuid, n_trials, n_cores, n_seeds
         )
 
-        self._optimizers: List[Callable[[Any], GradientDescentOptimizer]] = [
-            AdamOptimizer,
-            NesterovMomentumOptimizer,
-        ]
-
         self._model: QMLModel = model
 
     def find_hyperparameters(self) -> None:
@@ -608,7 +643,8 @@ class HyperparameterTuner(OptunaOptimizer):
             self._optuna_objective, n_trials=self._n_trials, n_jobs=self._n_cores
         )
 
-    def _suggest_optimizer(self, trial: optuna.trial.Trial) -> GradientDescentOptimizer:
+    @staticmethod
+    def _suggest_optimizer(trial: optuna.trial.Trial) -> GradientDescentOptimizer:
         """
 
         :param trial:
@@ -619,26 +655,23 @@ class HyperparameterTuner(OptunaOptimizer):
         """
 
         optimizer_type: str = trial.suggest_categorical(
-            "optimizer", [o.value for o in Optimizers]
+            "optimizer", [o for o in optimizers]
         )
 
-        optimizer: GradientDescentOptimizer
+        kwargs_data: Dict[str, any] = optimizers[optimizer_type]["kwargs"]
+        kwargs: Dict[str, any] = dict()
 
-        if optimizer_type == Optimizers.ADAM:
-            # Hyperparameters range taken from arXiv:1412.6980.
-            optimizer = AdamOptimizer(
-                stepsize=trial.suggest_float("stepsize", 0.00001, 0.1),
-                beta1=trial.suggest_float("beta1", 0, 0.9),
-                beta2=trial.suggest_float("beta2", 0.99, 0.9999),
+        # TR: Might need rebuilding for int and str kwargs.
+        for kwarg in kwargs_data:
+            kwargs[kwarg] = trial.suggest_float(
+                kwarg,
+                kwargs_data[kwarg]["min"],
+                kwargs_data[kwarg]["max"]
             )
 
-        if optimizer_type == Optimizers.NESTEROV:
-            # Hyperparameters range taken from
-            # https://cs231n.github.io/neural-networks-3/
-            optimizer = NesterovMomentumOptimizer(
-                stepsize=trial.suggest_float("stepsize", 0.00001, 0.1),
-                momentum=trial.suggest_float("momentum", 0.5, 0.9),
-            )
+        optimizer: GradientDescentOptimizer = optimizers[optimizer_type]["constructor"](
+            **kwargs
+        )
 
         return optimizer
 
