@@ -71,12 +71,12 @@ regressors: Dict[str, Dict[str, Any]] = {
 }
 
 data_embeddings: Dict[str, Dict[str, Any]] = {
-    "ANGLE": {
-
-    },
+    "ANGLE": {"constructor": AngleEmbedding, "kwargs": {}, "fixed_kwargs": {}},
     "AMPLITUDE": {
-
-    }
+        "constructor": AmplitudeEmbedding,
+        "kwargs": {},
+        "fixed_kwargs": {"pad_with": 0, "normalize": True},
+    },
 }
 
 optimizers: Dict[str, Dict[str, Any]] = {
@@ -85,15 +85,9 @@ optimizers: Dict[str, Dict[str, Any]] = {
         # Hyperparameters range taken from
         # https://cs231n.github.io/neural-networks-3/
         "kwargs": {
-            "stepsize": {
-                "min": 0.00001,
-                "max": 0.1
-            },
-            "momentum": {
-                "min": 0.5,
-                "max": 0.9
-            }
-        }
+            "stepsize": {"min": 0.00001, "max": 0.1},
+            "momentum": {"min": 0.5, "max": 0.9},
+        },
     },
     "ADAM": {
         "constructor": AdamOptimizer,
@@ -107,13 +101,11 @@ optimizers: Dict[str, Dict[str, Any]] = {
                 "min": 0,
                 "max": 0.9,
             },
-            "beta2": {
-                "min": 0.99,
-                "max": 0.9999
-            }
-        }
-    }
+            "beta2": {"min": 0.99, "max": 0.9999},
+        },
+    },
 }
+
 
 class MLTaskType(StrEnum):
     BINARY_CLASSIFICATION: str = auto()
@@ -124,11 +116,6 @@ class MLTaskType(StrEnum):
 class BinaryClassifierType(StrEnum):
     QNN: str = "QNN"
     QEK: str = "QEK"
-
-
-class DataEmbedding(StrEnum):
-    AMPLITUDE: str = "AMPLITUDE"
-    ANGLE: str = "ANGLE"
 
 
 class Layers(StrEnum):
@@ -271,11 +258,6 @@ class ModelFinder(OptunaOptimizer):
         self._quantum_linear_regressors: List[Callable[..., QMLModel]] = [
             QNNLinearRegression
         ]
-
-        self._embeddings: Dict[DataEmbedding, Type[pennylane.operation.Operation]] = {
-            DataEmbedding.AMPLITUDE: AmplitudeEmbedding,
-            DataEmbedding.ANGLE: AngleEmbedding,
-        }
 
         self._layers: Dict[Layers, Type[pennylane.operation.Operation]] = {
             Layers.BASIC: BasicEntanglerLayers,
@@ -496,16 +478,14 @@ class ModelFinder(OptunaOptimizer):
             QML model.
         """
         embedding_type: str = trial.suggest_categorical(
-            "embedding" + self._optuna_postfix, [e for e in DataEmbedding]
+            "embedding" + self._optuna_postfix, [e for e in data_embeddings]
         )
 
-        kwargs["embedding_method"] = self._embeddings[embedding_type]
+        kwargs["embedding_method"] = data_embeddings[embedding_type]["constructor"]
 
         embedding_kwargs: Dict[str, Any] = {"wires": range(kwargs["wires"])}
 
-        if embedding_type == DataEmbedding.AMPLITUDE:
-            embedding_kwargs["pad_with"] = 0
-            embedding_kwargs["normalize"] = True
+        embedding_kwargs.update(data_embeddings[embedding_type]["fixed_kwargs"])
 
         kwargs["embedding_kwargs"] = embedding_kwargs
 
@@ -554,7 +534,8 @@ class ModelFinder(OptunaOptimizer):
         kwargs: Dict[str, Any] = {
             "wires": len(self._x[0]),
             "n_layers": trial.suggest_int("n_layers" + self._optuna_postfix, 1, 3),
-            "batch_size": self._batch_size}
+            "batch_size": self._batch_size,
+        }
 
         return kwargs
 
@@ -664,9 +645,7 @@ class HyperparameterTuner(OptunaOptimizer):
         # TR: Might need rebuilding for int and str kwargs.
         for kwarg in kwargs_data:
             kwargs[kwarg] = trial.suggest_float(
-                kwarg,
-                kwargs_data[kwarg]["min"],
-                kwargs_data[kwarg]["max"]
+                kwarg, kwargs_data[kwarg]["min"], kwargs_data[kwarg]["max"]
             )
 
         optimizer: GradientDescentOptimizer = optimizers[optimizer_type]["constructor"](
