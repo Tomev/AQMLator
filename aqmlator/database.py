@@ -32,6 +32,7 @@
 import aqmlator.database_connection as db
 from subprocess import Popen
 import sqlite3
+import locale
 import os
 
 __author__ = "Tomasz Rybotycki"
@@ -51,8 +52,8 @@ def _dump_postgres_base(dump_file_name: str = "aqmlatorDump.sql") -> None:
         + db.get_database_url()
     )
 
-    proc = Popen(command, shell=True)
-    proc.wait()
+    with Popen(command, shell=True) as proc:
+        proc.wait()
 
 
 def _parse_to_sqlite(sql_file: str = "aqmlatorDump.sql") -> None:
@@ -65,16 +66,16 @@ def _parse_to_sqlite(sql_file: str = "aqmlatorDump.sql") -> None:
     """
     parsed_sql: str = ""
 
-    with open(sql_file, "r") as f:
+    with open(sql_file, "r", encoding=locale.getpreferredencoding()) as f:
         while True:
             line: str = f.readline()
 
             # Finish parsing when needed.
-            if line.__contains__("PostgreSQL database dump complete"):
+            if "PostgreSQL database dump complete" in line:
                 break
 
             # Keep only CREATE TABLE and INSERT commands.
-            if not (line.__contains__("CREATE TABLE") or line.__contains__("INSERT")):
+            if not ("CREATE TABLE" in line or "INSERT" in line):
                 continue
 
             # Remove `public.` from the database names.
@@ -82,12 +83,12 @@ def _parse_to_sqlite(sql_file: str = "aqmlatorDump.sql") -> None:
 
             parsed_sql += line
 
-            while not line.__contains__(";"):
+            while ";" not in line:
                 line = f.readline()
                 line = line.replace("public.", "")
                 parsed_sql += line
 
-    with open("parsed_" + sql_file, "w") as f:
+    with open("parsed_" + sql_file, "w", encoding=locale.getpreferredencoding()) as f:
         f.write(parsed_sql)
 
 
@@ -105,7 +106,7 @@ def _initialize_sqlite_db(
 
     database = sqlite3.connect(sqlite_db_name)
 
-    with open(sql_file, "r") as f:
+    with open(sql_file, "r", encoding=locale.getpreferredencoding()) as f:
         database.executescript(f.read())
 
     database.close()

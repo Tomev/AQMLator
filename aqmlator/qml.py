@@ -1232,7 +1232,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         self._rng_seed = new_seed
 
         for i in range(len(self._binary_classifiers)):
-            self._binary_classifiers[i]
+            self._binary_classifiers[i].seed(new_seed)
 
     def fit(
         self,

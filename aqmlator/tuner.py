@@ -40,7 +40,7 @@ import pennylane.numpy as np
 
 from optuna.samplers import TPESampler
 from typing import Sequence, List, Dict, Any, Tuple, Type, Callable, Optional
-from enum import StrEnum, auto
+from enum import StrEnum
 
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.templates.layers import StronglyEntanglingLayers, BasicEntanglerLayers
@@ -135,9 +135,9 @@ layer_types: Dict[str, Dict[str, Any]] = {
 
 
 class MLTaskType(StrEnum):
-    BINARY_CLASSIFICATION: str = auto()
-    CLASSIFICATION: str = auto()
-    REGRESSION: str = auto()
+    BINARY_CLASSIFICATION: str = "BINARY_CLASSIFICATION"
+    CLASSIFICATION: str = "CLASSIFICATION"
+    REGRESSION: str = "REGRESSION"
 
 
 class OptunaOptimizer(abc.ABC):
@@ -201,7 +201,7 @@ class ModelFinder(OptunaOptimizer):
 
     def __init__(
         self,
-        task_type: int,
+        task_type: str,
         features: Sequence[Sequence[float]],
         classes: Sequence[int],
         study_name: str = "QML_Model_Finder_",
@@ -246,7 +246,7 @@ class ModelFinder(OptunaOptimizer):
         # model finding.
         self._models_dict: Dict[str, Any] = {}
 
-        self._task_type: int = task_type
+        self._task_type: str = task_type
 
         self._n_epochs: int = n_epochs
 
@@ -303,7 +303,7 @@ class ModelFinder(OptunaOptimizer):
         self._initialize_model_dict()
 
         model_type: str = trial.suggest_categorical(
-            "model_type" + self._optuna_postfix, list(self._models_dict.keys())
+            "model_type" + self._optuna_postfix, list(self._models_dict)
         )
 
         kwargs: Dict[str, Any] = self._suggest_model_kwargs(trial, model_type)
@@ -361,8 +361,6 @@ class ModelFinder(OptunaOptimizer):
         """
         self._initialize_model_dict()
 
-        quantum_device_calls: int = 0
-
         n_classes: int = len(np.unique(self._y))
 
         binary_classifiers_kwargs: List[Dict[str, Any]] = []
@@ -419,7 +417,7 @@ class ModelFinder(OptunaOptimizer):
         }
 
         # TR: Might need to be extended for different arguments type at some point.
-        kwargs_data: Dict[str, any] = self._models_dict[model_type]["kwargs"]
+        kwargs_data: Dict[str, Any] = self._models_dict[model_type]["kwargs"]
 
         for kwarg in kwargs_data:
             kwargs[kwarg] = trial.suggest_int(
@@ -447,7 +445,7 @@ class ModelFinder(OptunaOptimizer):
             QML model.
         """
         embedding_type: str = trial.suggest_categorical(
-            "embedding" + self._optuna_postfix, [e for e in data_embeddings]
+            "embedding" + self._optuna_postfix, list(data_embeddings)
         )
 
         kwargs["embedding_method"] = data_embeddings[embedding_type]["constructor"]
@@ -476,7 +474,7 @@ class ModelFinder(OptunaOptimizer):
 
         for i in range(kwargs["n_layers"]):
             layer_type: str = trial.suggest_categorical(
-                f"layer_{i}" + self._optuna_postfix, list(layer_types.keys())
+                f"layer_{i}" + self._optuna_postfix, list(layer_types)
             )
             layers.append(layer_types[layer_type]["constructor"])
 
@@ -568,12 +566,10 @@ class HyperparameterTuner(OptunaOptimizer):
             The suggested optimizer.
         """
 
-        optimizer_type: str = trial.suggest_categorical(
-            "optimizer", [o for o in optimizers]
-        )
+        optimizer_type: str = trial.suggest_categorical("optimizer", list(optimizers))
 
-        kwargs_data: Dict[str, any] = optimizers[optimizer_type]["kwargs"]
-        kwargs: Dict[str, any] = dict()
+        kwargs_data: Dict[str, Any] = optimizers[optimizer_type]["kwargs"]
+        kwargs: Dict[str, Any] = {}
 
         # TR: Might need rebuilding for int and str kwargs.
         for kwarg in kwargs_data:
