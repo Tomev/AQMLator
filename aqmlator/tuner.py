@@ -60,6 +60,8 @@ from aqmlator.qml import (
 
 import aqmlator.database_connection as db
 
+# TODO TR:  Should those be global?
+
 binary_classifiers: Dict[str, Dict[str, Any]] = {
     "QNN": {
         "constructor": QNNBinaryClassifier,
@@ -123,16 +125,19 @@ optimizers: Dict[str, Dict[str, Any]] = {
     },
 }
 
+layer_types: Dict[str, Dict[str, Any]] = {
+    "BASIC": {"constructor": BasicEntanglerLayers, "weights_extension": ()},
+    "STRONGLY_ENTANGLING": {
+        "constructor": StronglyEntanglingLayers,
+        "weights_extension": (3,),
+    },
+}
+
 
 class MLTaskType(StrEnum):
     BINARY_CLASSIFICATION: str = auto()
     CLASSIFICATION: str = auto()
     REGRESSION: str = auto()
-
-
-class Layers(StrEnum):
-    BASIC: str = "BASIC"
-    STRONGLY_ENTANGLING: str = "STRONGLY_ENTANGLING"
 
 
 class OptunaOptimizer(abc.ABC):
@@ -253,11 +258,6 @@ class ModelFinder(OptunaOptimizer):
             MLTaskType.BINARY_CLASSIFICATION: self._simple_model_objective_function,
             MLTaskType.CLASSIFICATION: self._classification_objective_function,
             MLTaskType.REGRESSION: self._simple_model_objective_function,
-        }
-
-        self._layers: Dict[Layers, Type[pennylane.operation.Operation]] = {
-            Layers.BASIC: BasicEntanglerLayers,
-            Layers.STRONGLY_ENTANGLING: StronglyEntanglingLayers,
         }
 
         self._optuna_postfix: str = ""
@@ -475,16 +475,19 @@ class ModelFinder(OptunaOptimizer):
         layers_weights_shapes: List[Tuple[int, ...]] = []
 
         for i in range(kwargs["n_layers"]):
-            layer_type: int = trial.suggest_categorical(
-                f"layer_{i}" + self._optuna_postfix, [l for l in Layers]
+            layer_type: str = trial.suggest_categorical(
+                f"layer_{i}" + self._optuna_postfix, list(layer_types.keys())
             )
-            layers.append(self._layers[layer_type])
+            layers.append(layer_types[layer_type]["constructor"])
 
-            if layer_type == Layers.BASIC:
-                layers_weights_shapes.append((1, kwargs["wires"]))
+            # TR:   So far all the layer types begin with (N_LAYERS, N_WIRES) tuple, and
+            #       then proceed with some additional parameters. This may need to be
+            #       rethought later.
+            weights_shape: Tuple[int, ...] = (1, kwargs["wires"])
 
-            if layer_type == Layers.STRONGLY_ENTANGLING:
-                layers_weights_shapes.append((1, kwargs["wires"], 3))
+            weights_shape += layer_types[layer_type]["weights_extension"]
+
+            layers_weights_shapes.append(weights_shape)
 
         kwargs["layers"] = layers
         kwargs["layers_weights_shapes"] = layers_weights_shapes
