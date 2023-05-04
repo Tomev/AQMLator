@@ -60,11 +60,28 @@ from aqmlator.qml import (
 
 import aqmlator.database_connection as db
 
-binary_classifiers: Dict[str, Dict[str, Any]] = {"QNN": {}}
+binary_classifiers: Dict[str, Dict[str, Any]] = {
+    "QNN": {
+        "constructor": QNNBinaryClassifier,
+        "kwargs": {
+            "batch_size": (15, 25),
+        },
+        "fixed_kwargs": {},
+        "n_layers": (1, 3),
+    },
+    "QEK": {
+        "constructor": QuantumKernelBinaryClassifier,
+        "kwargs": {},
+        "fixed_kwargs": {},
+        "n_layers": (3, 5),
+    },
+}
 
 regressors: Dict[str, Dict[str, Any]] = {
     "QNN": {
-        "kwargs": {"n_epochs": 0, "accuracy_threshold": 0, "rng_seed": 0, "wires": 0},
+        "kwargs": {
+            "batch_size": (15, 25),
+        },
         "n_layers": (1, 3),
         "constructor": QNNLinearRegression,
     }
@@ -111,11 +128,6 @@ class MLTaskType(StrEnum):
     BINARY_CLASSIFICATION: str = auto()
     CLASSIFICATION: str = auto()
     REGRESSION: str = auto()
-
-
-class BinaryClassifierType(StrEnum):
-    QNN: str = "QNN"
-    QEK: str = "QEK"
 
 
 class Layers(StrEnum):
@@ -190,7 +202,6 @@ class ModelFinder(OptunaOptimizer):
         study_name: str = "QML_Model_Finder_",
         add_uuid: bool = True,
         minimal_accuracy: float = 0.8,
-        batch_size: int = 20,
         n_cores: int = -1,
         n_trials: int = 100,
         n_epochs: int = 10,
@@ -230,7 +241,6 @@ class ModelFinder(OptunaOptimizer):
 
         self._n_epochs: int = n_epochs
 
-        self._batch_size: int = batch_size
         self._minimal_accuracy: float = minimal_accuracy
 
         self._optuna_objective_functions: Dict[
@@ -240,24 +250,6 @@ class ModelFinder(OptunaOptimizer):
             MLTaskType.CLASSIFICATION: self._classification_objective_function,
             MLTaskType.REGRESSION: self._regression_objective_function,
         }
-
-        self._binary_classifiers: Dict[
-            BinaryClassifierType, Callable[..., QMLModel]
-        ] = {
-            BinaryClassifierType.QNN: QNNBinaryClassifier,
-            BinaryClassifierType.QEK: QuantumKernelBinaryClassifier,
-        }
-
-        self._binary_classifiers_kwargs_generator: Dict[
-            BinaryClassifierType, Callable[[optuna.trial.Trial], Dict[str, Any]]
-        ] = {
-            BinaryClassifierType.QNN: self._get_qnn_based_model_kwargs,
-            BinaryClassifierType.QEK: self._get_qek_binary_classifier_kwargs,
-        }
-
-        self._quantum_linear_regressors: List[Callable[..., QMLModel]] = [
-            QNNLinearRegression
-        ]
 
         self._layers: Dict[Layers, Type[pennylane.operation.Operation]] = {
             Layers.BASIC: BasicEntanglerLayers,
@@ -313,8 +305,8 @@ class ModelFinder(OptunaOptimizer):
         for seed in range(self._n_seeds):
             kwargs["rng_seed"] = seed
 
-            classifier: QMLModel = self._binary_classifiers[
-                trial.params["classifier_type"]
+            classifier: QMLModel = binary_classifiers[trial.params["classifier_type"]][
+                "constructor"
             ](**kwargs)
 
             classifier.fit(self._x, self._y)
@@ -344,15 +336,13 @@ class ModelFinder(OptunaOptimizer):
         for i in range(n_classes):
             self._optuna_postfix = f"_({i})"
 
-            kwargs: Dict[str, Any] = self._get_qnn_based_model_kwargs(trial)
-
-            kwargs["n_epochs"] = self._n_epochs
-            kwargs["accuracy_threshold"] = self._minimal_accuracy
-
-            self._suggest_layers(trial, kwargs)
+            kwargs: Dict[str, Any] = self._suggest_binary_classifier_kwargs(
+                trial, "QNN"
+            )
 
             binary_classifiers_kwargs.append(kwargs)
 
+        # Grade the classifier
         for seed in range(self._n_seeds):
             qnn_binary_classifiers: List[QNNBinaryClassifier] = []
 
@@ -401,22 +391,7 @@ class ModelFinder(OptunaOptimizer):
             "regressor_type", list(regressors.keys())
         )
 
-        kwargs: Dict[str, Any] = regressors[regressor_type]["kwargs"].copy()
-
-        kwargs["wires"] = len(self._x[0])
-        kwargs["n_layers"] = trial.suggest_int(
-            "n_layers" + self._optuna_postfix,
-            regressors[regressor_type]["n_layers"][0],
-            regressors[regressor_type]["n_layers"][0],
-        )
-
-        kwargs["batch_size"] = self._batch_size
-        kwargs["n_epochs"] = self._n_epochs
-        kwargs["accuracy_threshold"] = self._minimal_accuracy
-        kwargs["rng_seed"] = 0
-
-        self._suggest_embedding(trial, kwargs)
-        self._suggest_layers(trial, kwargs)
+        kwargs: Dict[str, Any] = self._suggest_regressor_kwargs(trial, regressor_type)
 
         for seed in range(self._n_seeds):
             kwargs["rng_seed"] = seed
@@ -428,6 +403,46 @@ class ModelFinder(OptunaOptimizer):
             quantum_device_calls += regressor.n_executions()
 
         return quantum_device_calls / self._n_seeds
+
+    def _suggest_regressor_kwargs(
+        self, trial: optuna.trial.Trial, regressor_type: str
+    ) -> Dict[str, Any]:
+        """
+        Suggests the kwargs for the specified regressor.
+
+        :param trial:
+            An optuna trial object for parameters selection.
+        :param regressor_type:
+            A string describing the type of the regressor.
+
+        :return:
+            Returns the suggested kwargs for the selected regressor type.
+        """
+        kwargs: Dict[str, Any] = {
+            "wires": len(self._x[0]),
+            "n_epochs": self._n_epochs,
+            "accuracy_threshold": self._minimal_accuracy,
+            "n_layers": trial.suggest_int(
+                "n_layers" + self._optuna_postfix,
+                regressors[regressor_type]["n_layers"][0],
+                regressors[regressor_type]["n_layers"][0],
+            ),
+        }
+
+        # TR: Might need to be extended for different arguments type at some point.
+        kwargs_data: Dict[str, any] = regressors[regressor_type]["kwargs"]
+
+        for kwarg in kwargs_data:
+            kwargs[kwarg] = trial.suggest_int(
+                kwarg + self._optuna_postfix,
+                kwargs_data[kwarg][0],
+                kwargs_data[kwarg][1],
+            )
+
+        self._suggest_embedding(trial, kwargs)
+        self._suggest_layers(trial, kwargs)
+
+        return kwargs
 
     def _suggest_binary_classifier(self, trial: optuna.trial.Trial) -> Dict[str, Any]:
         """
@@ -448,17 +463,52 @@ class ModelFinder(OptunaOptimizer):
         :return:
             Kwargs for the binary classifier initialization.
         """
-        trial.suggest_categorical(
-            "classifier_type" + self._optuna_postfix, [t for t in BinaryClassifierType]
+        classifier_type: str = trial.suggest_categorical(
+            "classifier_type" + self._optuna_postfix,
+            [t for t in binary_classifiers.keys()],
         )
 
-        kwargs: Dict[str, Any] = self._binary_classifiers_kwargs_generator[
-            trial.params["classifier_type"]
-        ](trial)
+        kwargs: Dict[str, Any] = self._suggest_binary_classifier_kwargs(
+            trial, classifier_type
+        )
 
-        kwargs["n_epochs"] = self._n_epochs
-        kwargs["accuracy_threshold"] = self._minimal_accuracy
-        kwargs["rng_seed"] = 0
+        return kwargs
+
+    def _suggest_binary_classifier_kwargs(
+        self, trial: optuna.trial.Trial, classifier_type: str
+    ) -> Dict[str, Any]:
+        """
+        Suggests the kwargs for the specified binary classifier.
+
+        :param trial:
+            An optuna trial object for parameters selection.
+        :param classifier_type:
+            A string describing the type of the classifier.
+
+        :return:
+            Returns the suggested kwargs for the selected binary classifier type.
+        """
+        kwargs: Dict[str, Any] = {
+            "wires": len(self._x[0]),
+            "n_layers": trial.suggest_int(
+                "n_layers" + self._optuna_postfix,
+                binary_classifiers[classifier_type]["n_layers"][0],
+                binary_classifiers[classifier_type]["n_layers"][1],
+            ),
+            "n_epochs": self._n_epochs,
+            "accuracy_threshold": self._minimal_accuracy,
+            "rng_seed": 0,
+        }
+
+        # TR: Might need to be extended for different arguments type at some point.
+        kwargs_data: Dict[str, any] = binary_classifiers[classifier_type]["kwargs"]
+
+        for kwarg in kwargs_data:
+            kwargs[kwarg] = trial.suggest_int(
+                kwarg + self._optuna_postfix,
+                kwargs_data[kwarg][0],
+                kwargs_data[kwarg][1],
+            )
 
         self._suggest_layers(trial, kwargs)
 
@@ -520,45 +570,6 @@ class ModelFinder(OptunaOptimizer):
         kwargs["layers"] = layers
         kwargs["layers_weights_shapes"] = layers_weights_shapes
         kwargs.pop("n_layers")
-
-    def _get_qnn_based_model_kwargs(self, trial: optuna.trial.Trial) -> Dict[str, Any]:
-        """
-        Prepares the dict of kwargs for `QNNModel` class.
-
-        :param trial:
-            Optuna `Trial` object that "suggests" the parameters values.
-
-        :return:
-            A dictionary with fields required for proper `QNNModel`  construction.
-        """
-        kwargs: Dict[str, Any] = {
-            "wires": len(self._x[0]),
-            "n_layers": trial.suggest_int("n_layers" + self._optuna_postfix, 1, 3),
-            "batch_size": self._batch_size,
-        }
-
-        return kwargs
-
-    def _get_qek_binary_classifier_kwargs(
-        self, trial: optuna.trial.Trial
-    ) -> Dict[str, Any]:
-        """
-        Prepares the dict of kwargs for `QuantumKernelBinaryClassifier` class.
-
-        :param trial:
-            Optuna `Trial` object that "suggests" the parameters values.
-
-        :return:
-            A dictionary with fields required for proper
-            `QuantumKernelBinaryClassifier` construction.
-        """
-
-        kwargs: Dict[str, Any] = {
-            "wires": len(self._x[0]),
-            "n_layers": trial.suggest_int("n_layers" + self._optuna_postfix, 3, 5),
-        }
-
-        return kwargs
 
 
 class HyperparameterTuner(OptunaOptimizer):
