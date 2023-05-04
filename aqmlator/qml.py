@@ -144,6 +144,15 @@ class QMLModel(abc.ABC):
         self.optimizer: GradientDescentOptimizer = optimizer
         self.weights: Sequence[float]
 
+    def seed(self, new_seed: int) -> None:
+        """
+        Sets up the new seed.
+
+        :param new_seed:
+            New seed to be applied to the model.
+        """
+        self._rng_seed = new_seed
+
     def n_executions(self) -> int:
         """
         Returns number of VQC executions so far.
@@ -1211,6 +1220,19 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             )
 
         return binary_classifiers
+
+    def seed(self, new_seed: int) -> None:
+        """
+        Sets up the new seed.
+
+        :param new_seed:
+            New seed to be applied to both the classifier and it's binary classifier
+            parts.
+        """
+        self._rng_seed = new_seed
+
+        for i in range(len(self._binary_classifiers)):
+            self._binary_classifiers[i].seed(new_seed)
 
     def fit(
         self,

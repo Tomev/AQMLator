@@ -1,6 +1,11 @@
 # AQMLator
 
-A package for auto quantum machine learning-izing your experiments!
+A package for auto (quantum machine learning)-izing your experiments!
+
+## Requirements
+
+Python version 3.11 is required. Necessary packages are provided in the respective
+requirements*.txt files.
 
 ## Access
 
