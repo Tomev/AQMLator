@@ -34,7 +34,7 @@ __author__ = "Tomasz Rybotycki"
 import abc
 import uuid
 import optuna
-import pennylane
+import pennylane as qml
 
 import pennylane.numpy as np
 
@@ -204,6 +204,7 @@ class ModelFinder(OptunaOptimizer):
         task_type: str,
         features: Sequence[Sequence[float]],
         classes: Sequence[int],
+        device: qml.Device,
         study_name: str = "QML_Model_Finder_",
         add_uuid: bool = True,
         minimal_accuracy: float = 0.8,
@@ -211,6 +212,7 @@ class ModelFinder(OptunaOptimizer):
         n_trials: int = 100,
         n_epochs: int = 10,
         n_seeds: int = 5,
+        coupling_map: Optional[List[List[int]]] = None,
     ):
         """
         A constructor for `ModelFinder` class.
@@ -224,6 +226,8 @@ class ModelFinder(OptunaOptimizer):
         :param study_name:
             The name of the `optuna` study. If the study with this name is already
             stored in the DB, the finder will continue the study.
+        :param device:
+            The device on which to run the model.
         :param add_uuid:
             Flag for specifying if uuid should be added to the `study_name`.
         :param minimal_accuracy:
@@ -237,9 +241,17 @@ class ModelFinder(OptunaOptimizer):
             The number of QNN training epochs.
         :param n_seeds:
             Number of seeds checked per `optuna` trial.
+        :param coupling_map:
+            A list of connected qubits.
         """
         super().__init__(
-            features, classes, study_name, add_uuid, n_trials, n_cores, n_seeds
+            features=features,
+            classes=classes,
+            study_name=study_name,
+            add_uuid=add_uuid,
+            n_trials=n_trials,
+            n_cores=n_cores,
+            n_seeds=n_seeds,
         )
 
         # A dict that will be string models taken under consideration during the
@@ -261,6 +273,9 @@ class ModelFinder(OptunaOptimizer):
         }
 
         self._optuna_postfix: str = ""
+
+        self.dev: qml.Device = device
+        self.device_coupling_map: Optional[List[List[int]]] = coupling_map
 
     def find_model(self) -> None:
         """
@@ -339,6 +354,7 @@ class ModelFinder(OptunaOptimizer):
         quantum_device_calls: int = 0
 
         for seed in range(self._n_seeds):
+            model.dev = self.dev
             model.seed(seed)
 
             model.fit(self._x, self._y)
@@ -469,7 +485,7 @@ class ModelFinder(OptunaOptimizer):
             A dictionary of keyword arguments that will be used to initialize the
             QML model.
         """
-        layers: List[Type[pennylane.operation.Operation]] = []
+        layers: List[Type[qml.operation.Operation]] = []
         layers_weights_shapes: List[Tuple[int, ...]] = []
 
         for i in range(kwargs["n_layers"]):
@@ -531,7 +547,13 @@ class HyperparameterTuner(OptunaOptimizer):
             Number of seeds checked per `optuna` trial.
         """
         super().__init__(
-            features, classes, study_name, add_uuid, n_trials, n_cores, n_seeds
+            features=features,
+            classes=classes,
+            study_name=study_name,
+            add_uuid=add_uuid,
+            n_trials=n_trials,
+            n_cores=n_cores,
+            n_seeds=n_seeds,
         )
 
         self._model: QMLModel = model

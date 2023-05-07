@@ -257,6 +257,8 @@ class TestQNNBinaryClassifier(TestQNNModel):
 
         n_qubits: int = 2
 
+        dev: pennylane.Device = pennylane.device("lightning.qubit", wires=n_qubits)
+
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
@@ -277,6 +279,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
             accuracy_threshold=accuracy_threshold,
             layers=layers,
             layers_weights_shapes=layers_weights_shapes,
+            device=dev,
         )
 
         self.alternate_model: QNNBinaryClassifier = QNNBinaryClassifier(
@@ -286,6 +289,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
             accuracy_threshold=accuracy_threshold,
             layers=alternate_layers,
             layers_weights_shapes=alternate_layers_weights_shapes,
+            device=dev,
         )
 
 
@@ -317,6 +321,7 @@ class TestQNNLinearRegressor(TestQNNModel):
         )
 
         n_qubits: int = 2
+        dev: pennylane.Device = pennylane.device("lightning.qubit", wires=n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -338,6 +343,7 @@ class TestQNNLinearRegressor(TestQNNModel):
             accuracy_threshold=accuracy_threshold,
             layers=layers,
             layers_weights_shapes=layers_weights_shapes,
+            device=dev,
         )
 
         self.alternate_model: QNNLinearRegression = QNNLinearRegression(
@@ -347,6 +353,7 @@ class TestQNNLinearRegressor(TestQNNModel):
             accuracy_threshold=accuracy_threshold,
             layers=alternate_layers,
             layers_weights_shapes=alternate_layers_weights_shapes,
+            device=dev,
         )
 
 
@@ -378,6 +385,8 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.n_qubits: int = 2
 
+        dev: pennylane.Device = pennylane.device("lightning.qubit", wires=self.n_qubits)
+
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
@@ -400,6 +409,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
             accuracy_threshold=accuracy_threshold,
             layers=layers,
             layers_weights_shapes=layers_weights_shapes,
+            device=dev,
         )
 
         self.alternate_classifier: QuantumKernelBinaryClassifier = (
@@ -409,6 +419,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
                 accuracy_threshold=accuracy_threshold,
                 layers=alternate_layers,
                 layers_weights_shapes=alternate_layers_weights_shapes,
+                device=dev,
             )
         )
 
@@ -573,15 +584,17 @@ class TestQuantumClassifier(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
+        dev: pennylane.Device = pennylane.device("lightning.qubit", wires=n_features)
+
         classifiers: List[QNNBinaryClassifier] = [
             QNNBinaryClassifier(
-                wires=n_features, batch_size=batch_size, n_epochs=n_epochs
+                wires=n_features, batch_size=batch_size, n_epochs=n_epochs, device=dev
             )
             for _ in range(n_classes)
         ]
 
         self.classifier: QNNClassifier = QNNClassifier(
-            wires=2, binary_classifiers=classifiers, n_classes=n_classes
+            wires=2, binary_classifiers=classifiers, n_classes=n_classes, device=dev
         )
 
     def tearDown(self) -> None:
