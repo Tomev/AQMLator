@@ -49,6 +49,7 @@ from pennylane.templates.layers import StronglyEntanglingLayers
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
 from pennylane.kernels import target_alignment
+from pennylane.transforms import transpile
 
 
 class QMLModel(abc.ABC):
@@ -332,9 +333,7 @@ class QNNModel(QMLModel, abc.ABC):
 
         self.weights = initial_weights
 
-        self.circuit: Optional[
-            Callable[[Sequence[float], Sequence[float]], Sequence[float]]
-        ] = None
+        self.circuit: Optional[qml.QNode] = None
 
         self._debug_flag: bool = debug_flag
 
@@ -345,10 +344,8 @@ class QNNModel(QMLModel, abc.ABC):
             [Sequence[Sequence[float]]], Union[Sequence[float], Sequence[int]]
         ] = prediction_function
 
-    def _create_circuit(
-        self, interface: str = "autograd"
-    ) -> Callable[[Sequence[float], Sequence[float]], Sequence[float]]:
-        @qml.qnode(self.dev, interface=interface)
+    def _create_circuit(self, interface: str = "autograd") -> qml.QNode:
+        # @qml.qnode(self.dev, interface=interface)
         def circuit(
             inputs: Union[Sequence[float], torch.Tensor],
             weights: Union[np.ndarray, torch.Tensor],
@@ -393,7 +390,10 @@ class QNNModel(QMLModel, abc.ABC):
             return [qml.expval(qml.PauliZ((i))) for i in self.wires]
             # return qml.expval(qml.PauliZ((self.wires[0],)))
 
-        return circuit
+        if self.coupling_map:
+            circuit = transpile(coupling_map=self.coupling_map)(circuit)
+
+        return qml.QNode(circuit, self.dev, interface=interface)
 
     def get_circuit_expectation_values(
         self, features_lists: Sequence[Sequence[float]]
@@ -849,9 +849,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
     def _create_transform(
         self,
-    ) -> Callable[
-        [Sequence[float], Sequence[float]], List[qml.measurements.ExpectationMP]
-    ]:
+    ) -> qml.QNode:
         """
         Creates a feature map VQC based on the current kernel.
 
@@ -859,7 +857,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             The feature map VQC based on the current kernel.
         """
 
-        @qml.qnode(self.dev)
+        # @qml.qnode(self.dev)
         def transform(
             weights: Sequence[float], features: Sequence[float]
         ) -> List[qml.measurements.ExpectationMP]:
@@ -879,7 +877,10 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             # TODO TR: Is this a good measurement to return?
             return [qml.expval(qml.PauliZ((i,))) for i in self.wires]
 
-        return transform
+        if self.coupling_map:
+            transform = transpile(coupling_map=self.coupling_map)(transform)
+
+        return qml.QNode(transform, self.dev)
 
     def _create_kernel(
         self,
@@ -1072,9 +1073,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :return:
             The representation of the given object in the feature space.
         """
-        transform: Callable[
-            [Sequence[float], Sequence[float]], List[qml.measurements.ExpectationMP]
-        ] = self._create_transform()
+        transform: qml.QNode = self._create_transform()
 
         mapped_features: List[List[qml.measurements.ExpectationMP]] = []
 
