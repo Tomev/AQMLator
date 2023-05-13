@@ -126,10 +126,9 @@ optimizers: Dict[str, Dict[str, Any]] = {
 }
 
 layer_types: Dict[str, Dict[str, Any]] = {
-    "BASIC": {"constructor": BasicEntanglerLayers, "weights_extension": ()},
+    "BASIC": {"constructor": BasicEntanglerLayers},
     "STRONGLY_ENTANGLING": {
         "constructor": StronglyEntanglingLayers,
-        "weights_extension": (3,),
     },
 }
 
@@ -486,7 +485,6 @@ class ModelFinder(OptunaOptimizer):
             QML model.
         """
         layers: List[Type[qml.operation.Operation]] = []
-        layers_weights_shapes: List[Tuple[int, ...]] = []
 
         for i in range(kwargs["n_layers"]):
             layer_type: str = trial.suggest_categorical(
@@ -497,14 +495,8 @@ class ModelFinder(OptunaOptimizer):
             # TR:   So far all the layer types begin with (N_LAYERS, N_WIRES) tuple, and
             #       then proceed with some additional parameters. This may need to be
             #       rethought later.
-            weights_shape: Tuple[int, ...] = (1, kwargs["wires"])
-
-            weights_shape += layer_types[layer_type]["weights_extension"]
-
-            layers_weights_shapes.append(weights_shape)
 
         kwargs["layers"] = layers
-        kwargs["layers_weights_shapes"] = layers_weights_shapes
         kwargs.pop("n_layers")
 
 

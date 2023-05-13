@@ -36,14 +36,14 @@ import abc
 import os
 
 import dill
-import pennylane
+import pennylane as qml
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
 from pennylane.measurements import ExpectationMP
 
 import torch
 
-from typing import Sequence, List, Tuple, Type
+from typing import Sequence, List, Tuple, Type, Optional
 from sklearn.datasets import make_moons, make_regression, make_classification
 from numpy import isclose
 from numpy.random import RandomState
@@ -54,6 +54,7 @@ from aqmlator.qml import (
     QNNLinearRegression,
     QNNClassifier,
 )
+from qiskit import IBMQ
 
 from pennylane import numpy as np
 
@@ -257,17 +258,15 @@ class TestQNNBinaryClassifier(TestQNNModel):
 
         n_qubits: int = 2
 
-        dev: pennylane.Device = pennylane.device("lightning.qubit", wires=n_qubits)
+        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
-        layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
 
         alternate_layers: List[Type[Operation]] = [
-            pennylane.templates.BasicEntanglerLayers
+            qml.templates.BasicEntanglerLayers
         ] * 2
-        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
 
         self.n_epochs: int = 2
         batch_size: int = 20
@@ -278,7 +277,6 @@ class TestQNNBinaryClassifier(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
-            layers_weights_shapes=layers_weights_shapes,
             device=dev,
         )
 
@@ -288,7 +286,6 @@ class TestQNNBinaryClassifier(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=alternate_layers,
-            layers_weights_shapes=alternate_layers_weights_shapes,
             device=dev,
         )
 
@@ -321,17 +318,15 @@ class TestQNNLinearRegressor(TestQNNModel):
         )
 
         n_qubits: int = 2
-        dev: pennylane.Device = pennylane.device("lightning.qubit", wires=n_qubits)
+        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
-        layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits, 3)] * 3
 
         alternate_layers: List[Type[Operation]] = [
-            pennylane.templates.BasicEntanglerLayers
+            qml.templates.BasicEntanglerLayers
         ] * 2
-        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [(1, n_qubits)] * 2
 
         self.n_epochs: int = 3
         batch_size: int = 20
@@ -342,7 +337,6 @@ class TestQNNLinearRegressor(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
-            layers_weights_shapes=layers_weights_shapes,
             device=dev,
         )
 
@@ -352,7 +346,6 @@ class TestQNNLinearRegressor(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=alternate_layers,
-            layers_weights_shapes=alternate_layers_weights_shapes,
             device=dev,
         )
 
@@ -385,7 +378,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.n_qubits: int = 2
 
-        dev: pennylane.Device = pennylane.device("lightning.qubit", wires=self.n_qubits)
+        dev: qml.Device = qml.device("lightning.qubit", wires=self.n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -395,7 +388,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         self.weights_length: int = 18
 
         alternate_layers: List[Type[Operation]] = [
-            pennylane.templates.BasicEntanglerLayers
+            qml.templates.BasicEntanglerLayers
         ] * 3
         alternate_layers_weights_shapes: List[Tuple[int, ...]] = [
             (1, self.n_qubits)
@@ -408,7 +401,6 @@ class TestQEKBinaryClassifier(unittest.TestCase):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
-            layers_weights_shapes=layers_weights_shapes,
             device=dev,
         )
 
@@ -418,7 +410,6 @@ class TestQEKBinaryClassifier(unittest.TestCase):
                 n_epochs=self.n_epochs,
                 accuracy_threshold=accuracy_threshold,
                 layers=alternate_layers,
-                layers_weights_shapes=alternate_layers_weights_shapes,
                 device=dev,
             )
         )
@@ -584,7 +575,7 @@ class TestQuantumClassifier(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        dev: pennylane.Device = pennylane.device("lightning.qubit", wires=n_features)
+        dev: qml.Device = qml.device("lightning.qubit", wires=n_features)
 
         classifiers: List[QNNBinaryClassifier] = [
             QNNBinaryClassifier(
@@ -594,7 +585,10 @@ class TestQuantumClassifier(unittest.TestCase):
         ]
 
         self.classifier: QNNClassifier = QNNClassifier(
-            wires=2, binary_classifiers=classifiers, n_classes=n_classes, device=dev
+            wires=n_features,
+            binary_classifiers=classifiers,
+            n_classes=n_classes,
+            device=dev,
         )
 
     def tearDown(self) -> None:
@@ -667,3 +661,152 @@ class TestQuantumClassifier(unittest.TestCase):
         """
         self.classifier.predict(self.X)
         self.test_initial_serialization()
+
+
+# TODO TR: Think of a less general case for this class.
+class TestQuantumDevicesHandling(unittest.TestCase):
+    def setUp(self) -> None:
+        n_samples: int = 50
+        seed: int = 0
+
+        self.n_features: int = 3
+        self.n_classes: int = 2
+        self.noise: float = 0.1
+        self.batch_size: int = n_samples // 5
+        self.n_epochs: int = 1
+        self.accuracy_threshold: float = 0.8
+
+        self.class_X: Sequence[Sequence[float]]
+        self.class_y: Sequence[int]
+
+        self.class_X, self.class_y = make_classification(
+            n_samples=n_samples,
+            n_features=self.n_features,
+            n_classes=self.n_classes,
+            n_redundant=0,
+            n_clusters_per_class=1,
+            random_state=RandomState(seed),
+        )
+
+        self.regression_X: Sequence[Sequence[float]]
+        self.regression_y: Sequence[float]
+
+        self.regression_X, self.regression_y = make_regression(
+            n_samples=n_samples,
+            n_features=self.n_features,
+            shuffle=True,
+            noise=self.noise,
+            random_state=RandomState(seed),
+        )
+
+        IBMQ.load_account()
+        provider = IBMQ.get_provider(hub="ibm-q", group="open", project="main")
+
+        backends = provider.backends()
+
+        for i in range(len(backends)):
+            if (
+                "simulator" in str(backends[i]).lower()
+                or backends[i].configuration().n_qubits < 3
+            ):
+                continue
+            backend = backends[i]
+            self.n_qubits: int = backend.configuration().n_qubits
+            break
+
+        # backend = provider.backend.ibmq_lima
+        config = backend.configuration()
+
+        self.coupling_map: List[Sequence[int]] = config.coupling_map
+
+        self.dev: qml.Device = qml.device(
+            "qiskit.aer",
+            wires=self.n_features,
+            backend="unitary_simulator",
+        )
+
+        self.coupled_dev = qml.device(
+            "qiskit.aer",
+            wires=self.n_features,
+            backend="unitary_simulator",
+            coupling_map=self.coupling_map,
+        )
+
+        self.layers: List[Type[Operation]] = [
+            StronglyEntanglingLayers
+        ] * 3  # 3 StronglyEntanglingLayers
+
+    def _proceed_with_qek_classifier_test(
+        self,
+        coupling_map: Optional[List[Sequence[int]]] = None,
+        dev: Optional[qml.Device] = None,
+    ) -> None:
+        qek_classifier: QuantumKernelBinaryClassifier = QuantumKernelBinaryClassifier(
+            wires=self.n_features,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=self.accuracy_threshold,
+            layers=self.layers,
+            device=self.dev,
+            coupling_map=coupling_map,
+        )
+        qek_classifier.fit(self.class_X, self.class_y)
+        self.assertTrue(True)
+
+    def _proceed_with_qnn_regressor_test(
+        self,
+        coupling_map: Optional[List[Sequence[int]]] = None,
+        dev: Optional[qml.Device] = None,
+    ):
+        qnn_regressor: QNNLinearRegression = QNNLinearRegression(
+            wires=self.n_features,
+            batch_size=self.batch_size,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=self.accuracy_threshold,
+            layers=self.layers,
+            device=self.dev,
+            coupling_map=coupling_map,
+        )
+        qnn_regressor.fit(self.regression_X, self.regression_y)
+        self.assertTrue(True)
+
+    def _proceed_wth_qnn_classifier_test(
+        self,
+        coupling_map: Optional[List[Sequence[int]]] = None,
+        dev: Optional[qml.Device] = None,
+    ):
+        if not dev:
+            dev = self.dev
+
+        qnn_classifier: QNNBinaryClassifier = QNNBinaryClassifier(
+            wires=self.n_features,
+            batch_size=self.batch_size,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=self.accuracy_threshold,
+            layers=self.layers,
+            device=dev,
+            coupling_map=coupling_map,
+        )
+
+        qnn_classifier.fit(self.class_X, self.class_y)
+        self.assertTrue(True)
+
+    def test_qek_classifier_on_qiskit_simulator(self) -> None:
+        self._proceed_with_qek_classifier_test()
+
+    def test_qnn_classifier_on_qiskit_simulator(self) -> None:
+        self._proceed_wth_qnn_classifier_test()
+
+    def test_qnn_regressor_on_qiskit_simulator(self) -> None:
+        self._proceed_with_qnn_regressor_test()
+
+    def test_qek_classifier_with_coupling(self) -> None:
+        self._proceed_with_qek_classifier_test(self.coupling_map)
+
+    def test_qnn_classifier_with_coupling(self) -> None:
+        self._proceed_wth_qnn_classifier_test(self.coupling_map)
+
+    def test_qnn_regressor_with_coupling(self) -> None:
+        self._proceed_with_qnn_regressor_test(self.coupling_map)
+
+    def test_qnn_classifier_on_coupled_device(self) -> None:
+        self._proceed_wth_qnn_classifier_test(dev=self.coupled_dev)
