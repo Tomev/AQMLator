@@ -39,7 +39,7 @@ import pennylane as qml
 import pennylane.numpy as np
 
 from optuna.samplers import TPESampler
-from typing import Sequence, List, Dict, Any, Tuple, Type, Callable, Optional
+from typing import Sequence, List, Dict, Any, Type, Callable, Optional
 from enum import StrEnum
 
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding

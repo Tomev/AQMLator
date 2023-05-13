@@ -722,13 +722,13 @@ class TestQuantumDevicesHandling(unittest.TestCase):
         self.dev: qml.Device = qml.device(
             "qiskit.aer",
             wires=self.n_features,
-            backend="unitary_simulator",
+            backend="aer_simulator_statevector",
         )
 
         self.coupled_dev = qml.device(
             "qiskit.aer",
             wires=self.n_features,
-            backend="unitary_simulator",
+            backend="aer_simulator_statevector",
             coupling_map=self.coupling_map,
         )
 
@@ -741,12 +741,15 @@ class TestQuantumDevicesHandling(unittest.TestCase):
         coupling_map: Optional[List[Sequence[int]]] = None,
         dev: Optional[qml.Device] = None,
     ) -> None:
+        if not dev:
+            dev = self.dev
+
         qek_classifier: QuantumKernelBinaryClassifier = QuantumKernelBinaryClassifier(
             wires=self.n_features,
             n_epochs=self.n_epochs,
             accuracy_threshold=self.accuracy_threshold,
             layers=self.layers,
-            device=self.dev,
+            device=dev,
             coupling_map=coupling_map,
         )
         qek_classifier.fit(self.class_X, self.class_y)
@@ -757,13 +760,16 @@ class TestQuantumDevicesHandling(unittest.TestCase):
         coupling_map: Optional[List[Sequence[int]]] = None,
         dev: Optional[qml.Device] = None,
     ):
+        if not dev:
+            dev = self.dev
+
         qnn_regressor: QNNLinearRegression = QNNLinearRegression(
             wires=self.n_features,
             batch_size=self.batch_size,
             n_epochs=self.n_epochs,
             accuracy_threshold=self.accuracy_threshold,
             layers=self.layers,
-            device=self.dev,
+            device=dev,
             coupling_map=coupling_map,
         )
         qnn_regressor.fit(self.regression_X, self.regression_y)
@@ -810,3 +816,9 @@ class TestQuantumDevicesHandling(unittest.TestCase):
 
     def test_qnn_classifier_on_coupled_device(self) -> None:
         self._proceed_wth_qnn_classifier_test(dev=self.coupled_dev)
+
+    def test_qnn_regressor_on_coupled_device(self) -> None:
+        self._proceed_with_qnn_regressor_test(dev=self.coupled_dev)
+
+    def test_qek_classifier_on_coupled_device(self) -> None:
+        self._proceed_with_qek_classifier_test(dev=self.coupled_dev)

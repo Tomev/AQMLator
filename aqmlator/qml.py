@@ -842,7 +842,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         start_weights: int = 0
 
-        for i, layer in enumerate(self._layers):
+        for layer in self._layers:
             for op in self._embedding_method(
                 features, do_queue=False, **self._embedding_kwargs
             ).expand():
