@@ -38,6 +38,7 @@ from aqmlator.tuner import ModelFinder, HyperparameterTuner, MLTaskType
 from aqmlator.qml import QNNBinaryClassifier
 from sklearn.datasets import make_moons, make_regression, make_classification
 from numpy.random import RandomState
+import pennylane as qml
 
 
 class TestModelFinder(unittest.TestCase):
@@ -83,9 +84,12 @@ class TestModelFinder(unittest.TestCase):
             random_state=RandomState(0),
         )
 
+        n_qubits: int = 2
         n_seeds: int = 2
         n_trials: int = 4
         n_epochs: int = 3
+
+        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         self.binary_classifier_finder: ModelFinder = ModelFinder(
             task_type=MLTaskType.BINARY_CLASSIFICATION,
@@ -95,6 +99,7 @@ class TestModelFinder(unittest.TestCase):
             n_trials=n_trials,
             n_seeds=n_seeds,
             n_epochs=n_epochs,
+            device=dev,
         )
 
         self.classifier_finder: ModelFinder = ModelFinder(
@@ -105,6 +110,7 @@ class TestModelFinder(unittest.TestCase):
             n_trials=n_trials,
             n_seeds=n_seeds,
             n_epochs=n_epochs,
+            device=dev,
         )
 
         self.linear_regressor_finder: ModelFinder = ModelFinder(
@@ -115,6 +121,7 @@ class TestModelFinder(unittest.TestCase):
             n_trials=n_trials,
             n_seeds=n_seeds,
             n_epochs=n_epochs,
+            device=dev,
         )
 
     def test_binary_classification_model_finding(self) -> None:
@@ -170,11 +177,18 @@ class TestHyperparameterTuner(unittest.TestCase):
 
         n_seeds: int = 2
         n_trials: int = 2
+        n_qubits: int = 2
 
-        classifier: QNNBinaryClassifier = QNNBinaryClassifier(2, 20, 5)
+        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
+
+        classifier: QNNBinaryClassifier = QNNBinaryClassifier(2, 20, 5, device=dev)
 
         self.tuner: HyperparameterTuner = HyperparameterTuner(
-            x, y, classifier, n_seeds=n_seeds, n_trials=n_trials
+            x,
+            y,
+            classifier,
+            n_seeds=n_seeds,
+            n_trials=n_trials,
         )
 
     def test_hyperparameter_tuner_running(self) -> None:

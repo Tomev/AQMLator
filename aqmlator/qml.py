@@ -49,6 +49,7 @@ from pennylane.templates.layers import StronglyEntanglingLayers
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
 from pennylane.kernels import target_alignment
+from pennylane.transforms import transpile
 
 
 class QMLModel(abc.ABC):
@@ -59,14 +60,15 @@ class QMLModel(abc.ABC):
     def __init__(
         self,
         wires: Union[int, Sequence[int]],
-        device_string: str = "lightning.qubit",
+        device: Optional[qml.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
         layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
-        layers_weights_shapes: Optional[Sequence[Tuple[int, ...]]] = None,
         validation_set_size: float = 0.2,
         rng_seed: int = 42,
+        coupling_map: Optional[List[List[int]]] = None,
+        n_qubit: Optional[int] = None,
     ):
         """
         The constructor for the `QMLModel` class.
@@ -74,8 +76,8 @@ class QMLModel(abc.ABC):
         :param wires:
             The wires to use in the VQC or the number of qubits (and wires) used in the
             VQC.
-        :param device_string:
-            A string naming the device used to run the VQC.
+        :param device:
+            A device on which the model should operate.
         :param optimizer:
             The optimizer that will be used in the training. `NesterovMomentumOptimizer`
             with default parameters will be used as default.
@@ -89,17 +91,15 @@ class QMLModel(abc.ABC):
         :param layers:
             Layers to be used in the VQC. The layers will be applied in the given order.
             A double `StronglyEntanglingLayer` will be used if `None` is given.
-        :param layers_weights_shapes:
-            The shapes of the corresponding layers. Note that the default layers setup
-            will be used if `None` is given.
         :param validation_set_size:
             A part of the training set that will be used for QMLModel validation.
             It should be from (0, 1).
         :param rng_seed:
             A seed used for random weights initialization.
+        :param coupling_map:
+            A description of connections between the qubits in the device.
         """
-        self._dev: qml.Device
-        self._device_string: str = device_string
+        self.dev: qml.Device = device
 
         self.wires: Sequence[int]
 
@@ -123,15 +123,11 @@ class QMLModel(abc.ABC):
             self._embedding_kwargs = embedding_kwargs
 
         self._layers: Sequence[Type[qml.operation.Operation]]
-        self._layers_weights_shapes: Sequence[Tuple[int, ...]]
 
-        if layers is None or layers_weights_shapes is None:
-            self._prepare_default_layers()
-        elif len(layers) != len(layers_weights_shapes):
+        if layers is None:
             self._prepare_default_layers()
         else:
             self._layers = layers
-            self._layers_weights_shapes = layers_weights_shapes
 
         self._rng_seed: int = rng_seed
         self._rng: random.Random = random.Random(rng_seed)
@@ -143,6 +139,13 @@ class QMLModel(abc.ABC):
 
         self.optimizer: GradientDescentOptimizer = optimizer
         self.weights: Sequence[float]
+
+        self.coupling_map: Optional[List[List[int]]] = coupling_map
+
+        if not n_qubit:
+            n_qubit = len(self.wires)
+
+        self.n_qubit: int = n_qubit
 
     def seed(self, new_seed: int) -> None:
         """
@@ -160,25 +163,21 @@ class QMLModel(abc.ABC):
         :return:
             Returns the number of times the quantum device was called.
         """
-        return self._dev.num_executions
+        return self.dev.num_executions
 
     @abc.abstractmethod
     def fit(
         self,
         X: Sequence[Sequence[float]],
         y: Sequence[int],
-        dev: Optional[qml.Device] = None,
     ) -> "QMLModel":
         """
         The model training method.
 
-        :param features_lists:
+        :param X:
             The lists of features of the objects that are used during the training.
-        :param classes:
+        :param y:
             A list of classes corresponding to the given lists of features.
-        :param dev:
-            A quantum device on which the fitting should be performed. If `None` then
-            a new qml.Device will be initialised.
 
         :return:
             Returns self after training.
@@ -200,7 +199,6 @@ class QMLModel(abc.ABC):
         use a double strongly entangling layer.
         """
         self._layers = [StronglyEntanglingLayers] * 2
-        self._layers_weights_shapes = [(1, len(self.wires), 3)] * 2
 
     def _split_data_for_training(
         self, X: Sequence[Sequence[float]], y: Sequence[int]
@@ -237,12 +235,11 @@ class QNNModel(QMLModel, abc.ABC):
         wires: Union[int, Sequence[int]],
         batch_size: int,
         n_epochs: int = 1,
-        device_string: str = "lightning.qubit",
+        device: Optional[qml.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
         layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
-        layers_weights_shapes: Optional[Sequence[Tuple[int, ...]]] = None,
         accuracy_threshold: float = 0.8,
         initial_weights: Optional[Sequence[float]] = None,
         rng_seed: int = 42,
@@ -251,6 +248,8 @@ class QNNModel(QMLModel, abc.ABC):
             Callable[[Sequence[Sequence[float]]], Union[Sequence[float], Sequence[int]]]
         ] = None,
         debug_flag: bool = True,
+        coupling_map: Optional[List[List[int]]] = None,
+        n_qubit: Optional[int] = None,
     ) -> None:
         """
         The constructor for the `QNNModel` class.
@@ -262,8 +261,8 @@ class QNNModel(QMLModel, abc.ABC):
             Size of a batches used during the training.
         :param n_epochs:
             The number of training epochs.
-        :param device_string:
-            A string naming the device used to run the VQC.
+        :param device:
+            A device on which the model should operate.
         :param optimizer:
             The optimizer that will be used in the training. `NesterovMomentumOptimizer`
             with default parameters will be used as default.
@@ -277,9 +276,6 @@ class QNNModel(QMLModel, abc.ABC):
         :param layers:
             Layers to be used in the VQC. The layers will be applied in the given order.
             A double `StronglyEntanglingLayer` will be used if `None` is given.
-        :param layers_weights_shapes:
-            The shapes of the corresponding layers. Note that the default layers setup
-            will be used if `None` is given.
         :param accuracy_threshold:
             The satisfactory accuracy of the model.
         :param initial_weights:
@@ -295,29 +291,34 @@ class QNNModel(QMLModel, abc.ABC):
         :param debug_flag:
             A flag informing the model if the training info should be printed to the
             console or not.
+        :param coupling_map:
+            A description of connections between the qubits in the device.
         """
+
         super().__init__(
             wires,
-            device_string,
+            device,
             optimizer,
             embedding_method,
             embedding_kwargs,
             layers,
-            layers_weights_shapes,
             validation_set_size,
             rng_seed,
+            coupling_map,
+            n_qubit,
         )
 
         self._n_epochs: int = n_epochs
         self._batch_size: int = batch_size
-        self._dev_str: str = device_string
 
         self.accuracy_threshold: float = accuracy_threshold
 
         self._weights_length: int = 0
 
-        for shape in self._layers_weights_shapes:
-            self._weights_length += prod(shape)
+        for layer in self._layers:
+            self._weights_length += prod(
+                layer.shape(n_layers=1, n_wires=len(self.wires))
+            )
 
         if initial_weights is None or len(initial_weights) != self._weights_length:
             initial_weights = [
@@ -326,11 +327,7 @@ class QNNModel(QMLModel, abc.ABC):
 
         self.weights = initial_weights
 
-        self._dev = qml.device(device_string, wires=self.wires)
-
-        self.circuit: Optional[
-            Callable[[Sequence[float], Sequence[float]], Sequence[float]]
-        ] = None
+        self.circuit: Optional[qml.QNode] = None
 
         self._debug_flag: bool = debug_flag
 
@@ -341,10 +338,7 @@ class QNNModel(QMLModel, abc.ABC):
             [Sequence[Sequence[float]]], Union[Sequence[float], Sequence[int]]
         ] = prediction_function
 
-    def _create_circuit(
-        self, interface: str = "autograd"
-    ) -> Callable[[Sequence[float], Sequence[float]], Sequence[float]]:
-        @qml.qnode(self._dev, interface=interface)
+    def _create_circuit(self, interface: str = "autograd") -> qml.QNode:
         def circuit(
             inputs: Union[Sequence[float], torch.Tensor],
             weights: Union[np.ndarray, torch.Tensor],
@@ -371,25 +365,37 @@ class QNNModel(QMLModel, abc.ABC):
             if isinstance(inputs, torch.Tensor):
                 inputs = self._prepare_torch_inputs(inputs)
 
-            self._embedding_method(inputs, **self._embedding_kwargs)
+            for op in self._embedding_method(
+                inputs, do_queue=False, **self._embedding_kwargs
+            ).expand():
+                qml.apply(op)
 
             start_weights: int = 0
 
             for i, layer in enumerate(self._layers):
+                layer_shape: Tuple[int, ...] = layer.shape(
+                    n_layers=1, n_wires=len(self.wires)
+                )
+
                 layer_weights = weights[
-                    start_weights : start_weights + prod(self._layers_weights_shapes[i])
+                    start_weights : start_weights + prod(layer_shape)
                 ]
 
-                start_weights += prod(self._layers_weights_shapes[i])
+                start_weights += prod(layer_shape)
 
-                layer_weights = layer_weights.reshape(self._layers_weights_shapes[i])
+                layer_weights = layer_weights.reshape(layer_shape)
 
-                layer(layer_weights, wires=self.wires)
+                for op in layer(
+                    layer_weights, do_queue=False, wires=self.wires
+                ).expand():
+                    qml.apply(op)
 
             return [qml.expval(qml.PauliZ((i))) for i in self.wires]
-            # return qml.expval(qml.PauliZ((self.wires[0],)))
 
-        return circuit
+        if self.coupling_map:
+            circuit = transpile(coupling_map=self.coupling_map)(circuit)
+
+        return qml.QNode(circuit, self.dev, interface=interface)
 
     def get_circuit_expectation_values(
         self, features_lists: Sequence[Sequence[float]]
@@ -457,7 +463,6 @@ class QNNModel(QMLModel, abc.ABC):
         self,
         X: Sequence[Sequence[float]],
         y: Sequence[int],
-        dev: Optional[qml.Device] = None,
     ) -> "QNNModel":
         """
         The model training method.
@@ -468,17 +473,13 @@ class QNNModel(QMLModel, abc.ABC):
             The lists of features of the objects that are used during the training.
         :param y:
             A list of outputs corresponding to the given lists of features.
-        :param dev:
-            A quantum device on which the fitting should be performed. If `None` then
-            a new qml.Device will be initialised.
 
         :return:
             Returns `self` after training.
         """
-        if not dev:
-            dev = qml.device(self._device_string, wires=self.wires)
 
-        self._dev = dev
+        if not self.dev:
+            raise AttributeError("Specify the device (dev) before fitting.")
 
         self.circuit = self._create_circuit()
 
@@ -734,17 +735,17 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         wires: Union[int, Sequence[int]],
         n_epochs: int = 10,
         kta_subset_size: int = 5,
-        device_string: str = "lightning.qubit",
+        device: Optional[qml.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
         layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
-        layers_weights_shapes: Optional[Sequence[Tuple[int, ...]]] = None,
         initial_weights: Optional[Sequence[float]] = None,
         rng_seed: int = 42,
         accuracy_threshold: float = 0.8,
         validation_set_size: float = 0.2,
         debug_flag: bool = True,
+        coupling_map: Optional[List[List[int]]] = None,
     ) -> None:
         """
         A constructor for the `QuantumKernelBinaryClassifier` class.
@@ -757,8 +758,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :param kta_subset_size:
             The number of objects used to evaluate the kernel target alignment method
             in the cost function.
-        :param device_string:
-            A string naming the device used to run the VQC.
+        :param device:
+            A device on which the model should operate.
         :param optimizer:
             The optimizer that will be used in the training. `NesterovMomentumOptimizer`
             with default parameters will be used as default.
@@ -771,8 +772,6 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             classifier will use the default embedding method.
         :param layers:
             A list of `layer` functions to be applied in the kernel ansatz VQC.
-        :param layers_weights_shapes:
-            The parameters for the `layer` methods corresponding to the `layers`.
         :param initial_weights:
             The weights using which the training will start.
         :param rng_seed:
@@ -785,17 +784,19 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :param debug_flag:
             A flag informing the classifier if the training info should be printed
             to the console or not.
+        :param coupling_map:
+            A description of connections between the qubits in the device.
         """
         super().__init__(
             wires,
-            device_string,
+            device,
             optimizer,
             embedding_method,
             embedding_kwargs,
             layers,
-            layers_weights_shapes,
             validation_set_size,
             rng_seed,
+            coupling_map,
         )
 
         self.n_epochs: int = n_epochs
@@ -807,8 +808,10 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         self._weights_length: int = 0
 
-        for shape in self._layers_weights_shapes:
-            self._weights_length += prod(shape)
+        for layer in self._layers:
+            self._weights_length += prod(
+                layer.shape(n_layers=1, n_wires=len(self.wires))
+            )
 
         self._rng_seed: int = rng_seed
         self._rng: random.Random = random.Random(rng_seed)
@@ -822,13 +825,14 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         self._debug_flag: bool = debug_flag
 
-        self._dev: qml.Device = qml.device(device_string, wires=wires)
-
         self._classifier: SVC = SVC()
 
     def _ansatz(self, weights: Sequence[float], features: Sequence[float]) -> None:
         """
         A VQC ansatz that will be used in defining the quantum kernel function.
+
+        :note:
+            Templates expanding is necessary for the transpiling!
 
         :param weights:
             Weights that will be optimized during the learning process.
@@ -838,23 +842,26 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         start_weights: int = 0
 
-        for i, layer in enumerate(self._layers):
-            self._embedding_method(features, **self._embedding_kwargs)
+        for layer in self._layers:
+            for op in self._embedding_method(
+                features, do_queue=False, **self._embedding_kwargs
+            ).expand():
+                qml.apply(op)
 
-            layer_weights = weights[
-                start_weights : start_weights + prod(self._layers_weights_shapes[i])
-            ]
-            start_weights += prod(self._layers_weights_shapes[i])
-            layer_weights = np.array(layer_weights).reshape(
-                self._layers_weights_shapes[i]
+            layer_shape: Tuple[int, ...] = layer.shape(
+                n_layers=1, n_wires=len(self.wires)
             )
-            layer(layer_weights, wires=self.wires)
+
+            layer_weights = weights[start_weights : start_weights + prod(layer_shape)]
+            start_weights += prod(layer_shape)
+            layer_weights = np.array(layer_weights).reshape(layer_shape)
+
+            for op in layer(layer_weights, do_queue=False, wires=self.wires).expand():
+                qml.apply(op)
 
     def _create_transform(
         self,
-    ) -> Callable[
-        [Sequence[float], Sequence[float]], List[qml.measurements.ExpectationMP]
-    ]:
+    ) -> qml.QNode:
         """
         Creates a feature map VQC based on the current kernel.
 
@@ -862,7 +869,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             The feature map VQC based on the current kernel.
         """
 
-        @qml.qnode(self._dev)
+        # @qml.qnode(self.dev)
         def transform(
             weights: Sequence[float], features: Sequence[float]
         ) -> List[qml.measurements.ExpectationMP]:
@@ -882,7 +889,10 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             # TODO TR: Is this a good measurement to return?
             return [qml.expval(qml.PauliZ((i,))) for i in self.wires]
 
-        return transform
+        if self.coupling_map:
+            transform = transpile(coupling_map=self.coupling_map)(transform)
+
+        return qml.QNode(transform, self.dev)
 
     def _create_kernel(
         self,
@@ -900,7 +910,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             [Sequence[float], Sequence[float]], None
         ] = qml.adjoint(self._ansatz)
 
-        @qml.qnode(self._dev)
+        # @qml.qnode(self.dev)
         def kernel_circuit(
             weights: Sequence[float],
             first_features: Sequence[float],
@@ -923,6 +933,11 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             self._ansatz(weights, first_features)
             adjoint_ansatz(weights, second_features)
             return qml.probs(wires=self.wires)
+
+        if self.coupling_map:
+            kernel_circuit = transpile(coupling_map=self.coupling_map)(kernel_circuit)
+
+        kernel_circuit = qml.QNode(kernel_circuit, device=self.dev)
 
         def kernel(
             weights: Sequence[float],
@@ -980,7 +995,6 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         self,
         X: Sequence[Sequence[float]],
         y: Sequence[int],
-        dev: Optional[qml.Device] = None,
     ) -> "QuantumKernelBinaryClassifier":
         """
         The classifier training method.
@@ -997,10 +1011,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             Returns `self` after training.
         """
 
-        if not dev:
-            dev = qml.device(self._device_string, wires=self.wires)
-
-        self._dev = dev
+        if not self.dev:
+            raise AttributeError("Specify the device (dev) before fitting.")
 
         kernel: Callable[
             [Sequence[float], Sequence[float], Sequence[float]], float
@@ -1078,9 +1090,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :return:
             The representation of the given object in the feature space.
         """
-        transform: Callable[
-            [Sequence[float], Sequence[float]], List[qml.measurements.ExpectationMP]
-        ] = self._create_transform()
+        transform: qml.QNode = self._create_transform()
 
         mapped_features: List[List[qml.measurements.ExpectationMP]] = []
 
@@ -1117,12 +1127,11 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         binary_classifiers: Optional[Sequence[QNNBinaryClassifier]] = None,
         batch_size: int = 10,
         accuracy_threshold: float = 0.8,
-        device_string: str = "lightning.qubit",
+        device: Optional[qml.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
         layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
-        layers_weights_shapes: Optional[Sequence[Tuple[int, ...]]] = None,
         validation_set_size: float = 0.2,
         rng_seed: int = 42,
     ) -> None:
@@ -1143,8 +1152,8 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             The target minimal accuracy of the classifier. Note that it reflects total
             accuracy of the classifier, which is lower than accuracy of each binary
             classifier.
-        :param device_string:
-            A string naming the device used to run the VQCs.
+        :param device:
+            A device on which the model should operate.
         :param optimizer:
             The optimizer that will be used in the training. `NesterovMomentumOptimizer`
             with default parameters will be used as default. It will be used in each of
@@ -1161,10 +1170,6 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         :param layers:
             Layers to be used in the VQC. The layers will be applied in the given order.
             A double `StronglyEntanglingLayer` will be used if `None` is given.
-        :param layers_weights_shapes:
-            The shapes of the corresponding layers. Note that the default layers setup
-            will be used if `None` is given. It will be used in each of the binary
-            classifiers initialized by `QuantumClassifier`.
         :param validation_set_size:
             A part of the training set that will be used for QMLModel validation.
             It should be from (0, 1). It will be used in each of the binary classifiers.
@@ -1173,12 +1178,11 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         """
         super().__init__(
             wires,
-            device_string,
+            device,
             optimizer,
             embedding_method,
             embedding_kwargs,
             layers,
-            layers_weights_shapes,
             validation_set_size,
             rng_seed,
         )
@@ -1214,7 +1218,6 @@ class QNNClassifier(QMLModel, ClassifierMixin):
                     embedding_method=self._embedding_method,
                     embedding_kwargs=self._embedding_kwargs,
                     layers=self._layers,
-                    layers_weights_shapes=self._layers_weights_shapes,
                     validation_set_size=self._validation_set_size,
                 )
             )
@@ -1238,7 +1241,6 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         self,
         X: Sequence[Sequence[float]],
         y: Sequence[int],
-        dev: qml.Device = None,
     ) -> "QNNClassifier":
         """
         The model training method. Essentially, it fits every binary classifier to the
@@ -1248,18 +1250,13 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             The lists of features of the objects that are used during the training.
         :param y:
             A list of outputs corresponding to the given lists of features.
-        :param dev:
-            A quantum device on which the fitting should be performed. If `None` then
-            a new qml.Device will be initialised.
 
         :return:
             Returns `self` after training.
         """
 
-        if not dev:
-            dev = qml.device(self._device_string, wires=self.wires)
-
-        self._dev = dev
+        if not self.dev:
+            raise AttributeError("Specify the device (dev) before fitting.")
 
         # Check if there's a binary classifier for each class.
         unique_classes: np.ndarray = np.unique(y)
@@ -1280,7 +1277,8 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             classifier_classes[classifier_classes != unique_classes[i]] = -1
             classifier_classes[classifier_classes == unique_classes[i]] = 1
 
-            self._binary_classifiers[i].fit(X, classifier_classes, self._dev)
+            self._binary_classifiers[i].dev = self.dev
+            self._binary_classifiers[i].fit(X, classifier_classes)
 
         return self
 
