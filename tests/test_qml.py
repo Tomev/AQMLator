@@ -36,14 +36,16 @@ import abc
 import os
 
 import dill
+
 import pennylane as qml
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
 from pennylane.measurements import ExpectationMP
+from pennylane import numpy as np
 
 import torch
 
-from typing import Sequence, List, Tuple, Type, Optional
+from typing import Sequence, List, Type, Optional, Union
 from sklearn.datasets import make_moons, make_regression, make_classification
 from numpy import isclose
 from numpy.random import RandomState
@@ -56,13 +58,17 @@ from aqmlator.qml import (
 )
 from qiskit import IBMQ
 
-from pennylane import numpy as np
-
 
 class TestQNNModel(unittest.TestCase, abc.ABC):
     """
     A general `unittest.TestCase` class for QNN based QML models.
     """
+
+    x: Sequence[Sequence[float]]
+    y: Union[List[int], List[float]]
+
+    model: QNNModel
+    alternate_model: QNNModel
 
     def setUp(self) -> None:
         """
@@ -73,7 +79,7 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
             class if to set the skipping in the setUp. There may be a better way to do
             it though.
         """
-        raise unittest.SkipTest
+        raise unittest.SkipTest("Skipping tests for abstract QNNModel class.")
 
     def tearDown(self) -> None:
         if os.path.isfile("qml_test.dil"):
@@ -92,7 +98,7 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         """
         weights: List[np.ndarray] = []
 
-        for name, param in model.named_parameters():
+        for _, param in model.named_parameters():
             weights.append(np.array(param.detach().numpy()))
 
         return weights
@@ -102,14 +108,12 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         Tests if making predictions is possible.
         """
         self.model.predict(self.x)
-        self.assertTrue(True, "Predict crashed!")
 
     def test_fit_run(self) -> None:
         """
         Tests if the learning runs smoothly.
         """
         self.model.fit(self.x, self.y)
-        self.assertTrue(True, "Fit crashed.")
 
     def test_accuracy_increase(self) -> None:
         """
@@ -160,7 +164,6 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         Tests if making predictions is possible when different type of layers is used.
         """
         self.alternate_model.predict(self.x)
-        self.assertTrue(True, "Predict crashed!")
 
     def test_initial_serialization(self) -> None:
         """
@@ -201,7 +204,6 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         """
         model: torch.nn.Sequential = torch.nn.Sequential(self.model.get_torch_layer())
         model.forward(torch.tensor(self.x))
-        self.assertTrue(True, "Torch forward crashed!")
 
     def test_torch_results_dimension(self) -> None:
         """
@@ -223,12 +225,11 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
             self.alternate_model.get_torch_layer()
         )
         model.forward(torch.tensor(self.x))
-        self.assertTrue(True, "Torch forward crashed!")
 
 
 class TestQNNBinaryClassifier(TestQNNModel):
     """
-    A `TestCase` class for the qnn module.
+    A `TestCase` class for the QNN-based binary classifier.
     """
 
     def setUp(self) -> None:
@@ -241,9 +242,6 @@ class TestQNNBinaryClassifier(TestQNNModel):
         noise: float = 0.1
         n_samples: int = 100
         accuracy_threshold: float = 0.85
-
-        self.x: Sequence[Sequence[float]]
-        self.y: Sequence[int]
 
         self.x, self.y = make_moons(
             n_samples=n_samples,
@@ -292,7 +290,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
 
 class TestQNNLinearRegressor(TestQNNModel):
     """
-    A `TestCase` class for the qnn module.
+    A `TestCase` class for the QNN-based linear regressor.
     """
 
     def setUp(self) -> None:
@@ -306,10 +304,7 @@ class TestQNNLinearRegressor(TestQNNModel):
         n_samples: int = 100
         accuracy_threshold: float = 0.85
 
-        self.x: Sequence[Sequence[float]]
-        self.y: Sequence[int]
-
-        self.x, self.y = make_regression(
+        self.x, self.y = make_regression(  # pylint: disable=unbalanced-tuple-unpacking
             n_samples=n_samples,
             n_features=2,
             shuffle=True,
@@ -351,6 +346,10 @@ class TestQNNLinearRegressor(TestQNNModel):
 
 
 class TestQEKBinaryClassifier(unittest.TestCase):
+    """
+    A `TestCase` class for the QEK-based binary classifier.
+    """
+
     def setUp(self) -> None:
         """
         Sets up the tests.
@@ -361,9 +360,6 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         noise: float = 0.5
         n_samples: int = 15
         accuracy_threshold: float = 0.85
-
-        self.x: Sequence[Sequence[float]]
-        self.y: Sequence[int]
 
         self.x, self.y = make_moons(
             n_samples=n_samples,
@@ -383,16 +379,12 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
         ] * 3  # 3 StronglyEntanglingLayers
-        layers_weights_shapes: List[Tuple[int, ...]] = [(1, self.n_qubits, 3)] * 3
 
         self.weights_length: int = 18
 
         alternate_layers: List[Type[Operation]] = [
             qml.templates.BasicEntanglerLayers
         ] * 3
-        alternate_layers_weights_shapes: List[Tuple[int, ...]] = [
-            (1, self.n_qubits)
-        ] * 2
 
         self.n_epochs: int = 1
 
@@ -423,9 +415,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         Tests if fitting and making predictions is possible.
         """
         self.classifier.fit(self.x, self.y)
-        self.assertTrue(True, "The fit crashed!")
         self.classifier.predict(self.x)
-        self.assertTrue(True, "The prediction crashed!")
 
     def test_accuracy_increase(self) -> None:
         """
@@ -461,7 +451,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         Tests if the predictions have expected dimensions.
         """
         self.classifier.fit(self.x, self.y)
-        predictions: np.ndarray = self.classifier.predict(self.x)
+        predictions: np.ndarray = np.array(self.classifier.predict(self.x))
         self.assertTrue(
             predictions.shape == (len(self.x),),
             "QuantumKernelBinaryClassifier predictions have unexpected shape.",
@@ -484,9 +474,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         Tests if making predictions is possible when different type of layers is used.
         """
         self.alternate_classifier.fit(self.x, self.y)
-        self.assertTrue(True, "The learning crashed!")
         self.alternate_classifier.predict(self.x)
-        self.assertTrue(True, "The predicting crashed!")
 
     def test_transform_run(self) -> None:
         """
@@ -494,7 +482,6 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         """
         self.classifier.fit(self.x, self.y)
         self.classifier.transform(self.x)
-        self.assertTrue(True, "Transform crashed!")
 
     def test_transform_dimension(self) -> None:
         """
@@ -551,6 +538,10 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
 
 class TestQuantumClassifier(unittest.TestCase):
+    """
+    A `TestCase` class for general quantum classifier.
+    """
+
     def setUp(self) -> None:
         """
         Sets up the tests.
@@ -600,14 +591,12 @@ class TestQuantumClassifier(unittest.TestCase):
         Tests if making predictions is possible.
         """
         self.classifier.predict(self.X)
-        self.assertTrue(True)
 
     def test_fit_run(self) -> None:
         """
         Tests if classifier fitting is possible.
         """
         self.classifier.fit(self.X, self.y)
-        self.assertTrue(True)
 
     def test_results_dimensions(self) -> None:
         """
@@ -620,12 +609,12 @@ class TestQuantumClassifier(unittest.TestCase):
         """
         Tests if the classifier accuracy increase after the training.
         """
-        initial_accuracy: float = (
-            sum(self.classifier.predict(self.X) == self.y) / self.n_samples
+        initial_accuracy: float = np.mean(
+            [int(i == j) for i, j in zip(self.y, self.classifier.predict(self.X))]
         )
         self.classifier.fit(self.X, self.y)
-        final_accuracy: float = (
-            sum(self.classifier.predict(self.X) == self.y) / self.n_samples
+        final_accuracy: float = np.mean(
+            [int(i == j) for i, j in zip(self.classifier.predict(self.X), self.y)]
         )
         self.assertTrue(initial_accuracy < final_accuracy)
 
@@ -664,8 +653,15 @@ class TestQuantumClassifier(unittest.TestCase):
 
 
 # TODO TR: Think of a less general case for this class.
-class TestQuantumDevicesHandling(unittest.TestCase):
+class TestIBMQDevicesHandling(unittest.TestCase):
+    """
+    A class for testing if the qml models work as intended on IBM devices.
+    """
+
     def setUp(self) -> None:
+        """
+        Sets up the tests. Called before every test.
+        """
         n_samples: int = 50
         seed: int = 0
 
@@ -691,7 +687,10 @@ class TestQuantumDevicesHandling(unittest.TestCase):
         self.regression_X: Sequence[Sequence[float]]
         self.regression_y: Sequence[float]
 
-        self.regression_X, self.regression_y = make_regression(
+        (  # pylint: disable=unbalanced-tuple-unpacking
+            self.regression_X,
+            self.regression_y,
+        ) = make_regression(
             n_samples=n_samples,
             n_features=self.n_features,
             shuffle=True,
@@ -714,7 +713,6 @@ class TestQuantumDevicesHandling(unittest.TestCase):
             self.n_qubits: int = backend.configuration().n_qubits
             break
 
-        # backend = provider.backend.ibmq_lima
         config = backend.configuration()
 
         self.coupling_map: List[Sequence[int]] = config.coupling_map
@@ -741,6 +739,15 @@ class TestQuantumDevicesHandling(unittest.TestCase):
         coupling_map: Optional[List[Sequence[int]]] = None,
         dev: Optional[qml.Device] = None,
     ) -> None:
+        """
+        A common part of all the QEK Classifier-related tests. Test is passed if the
+        fitting don't crash.
+
+        :param coupling_map:
+            A coupling map to be applied when applying the VQC.
+        :param dev:
+            A device to run the VQC on.
+        """
         if not dev:
             dev = self.dev
 
@@ -753,13 +760,21 @@ class TestQuantumDevicesHandling(unittest.TestCase):
             coupling_map=coupling_map,
         )
         qek_classifier.fit(self.class_X, self.class_y)
-        self.assertTrue(True)
 
     def _proceed_with_qnn_regressor_test(
         self,
         coupling_map: Optional[List[Sequence[int]]] = None,
         dev: Optional[qml.Device] = None,
-    ):
+    ) -> None:
+        """
+        A common part of all the QNN Regressor-related tests. Test is passed if the
+        fitting don't crash.
+
+        :param coupling_map:
+            A coupling map to be applied when applying the VQC.
+        :param dev:
+            A device to run the VQC on.
+        """
         if not dev:
             dev = self.dev
 
@@ -773,13 +788,21 @@ class TestQuantumDevicesHandling(unittest.TestCase):
             coupling_map=coupling_map,
         )
         qnn_regressor.fit(self.regression_X, self.regression_y)
-        self.assertTrue(True)
 
     def _proceed_wth_qnn_classifier_test(
         self,
         coupling_map: Optional[List[Sequence[int]]] = None,
         dev: Optional[qml.Device] = None,
-    ):
+    ) -> None:
+        """
+        A common part of all the QNN Classifier-related tests. Test is passed if the
+        fitting don't crash.
+
+        :param coupling_map:
+            A coupling map to be applied when applying the VQC.
+        :param dev:
+            A device to run the VQC on.
+        """
         if not dev:
             dev = self.dev
 
@@ -794,31 +817,72 @@ class TestQuantumDevicesHandling(unittest.TestCase):
         )
 
         qnn_classifier.fit(self.class_X, self.class_y)
-        self.assertTrue(True)
 
     def test_qek_classifier_on_qiskit_simulator(self) -> None:
+        """
+        Tests if the QEK classifier works correctly on the unconstrained IBMQ device
+        simulator.
+        """
         self._proceed_with_qek_classifier_test()
 
     def test_qnn_classifier_on_qiskit_simulator(self) -> None:
+        """
+        Tests if the QNN classifier works correctly on the unconstrained IBMQ device
+        simulator.
+        """
         self._proceed_wth_qnn_classifier_test()
 
     def test_qnn_regressor_on_qiskit_simulator(self) -> None:
+        """
+        Tests if the QNN regressor works correctly on the unconstrained IBMQ device
+        simulator.
+        """
         self._proceed_with_qnn_regressor_test()
 
     def test_qek_classifier_with_coupling(self) -> None:
+        """
+        Tests if the QEK classifier works correctly with the coupling map applied
+        on the unconstrained IBMQ device simulator.
+        """
         self._proceed_with_qek_classifier_test(self.coupling_map)
 
     def test_qnn_classifier_with_coupling(self) -> None:
+        """
+        Tests if the QNN classifier works correctly with the coupling map applied
+        on the unconstrained IBMQ device simulator.
+        """
         self._proceed_wth_qnn_classifier_test(self.coupling_map)
 
     def test_qnn_regressor_with_coupling(self) -> None:
+        """
+        Tests if the QNN regressor works correctly with the coupling map applied
+        on the unconstrained IBMQ device simulator.
+        """
         self._proceed_with_qnn_regressor_test(self.coupling_map)
 
     def test_qnn_classifier_on_coupled_device(self) -> None:
-        self._proceed_wth_qnn_classifier_test(dev=self.coupled_dev)
+        """
+        Tests if the QNN classifier works correctly with the coupling map applied
+        on the real IBMQ device simulator.
+        """
+        self._proceed_wth_qnn_classifier_test(
+            dev=self.coupled_dev, coupling_map=self.coupling_map
+        )
 
     def test_qnn_regressor_on_coupled_device(self) -> None:
-        self._proceed_with_qnn_regressor_test(dev=self.coupled_dev)
+        """
+        Tests if the QNN regressor works correctly with the coupling map applied
+        on the real IBMQ device simulator.
+        """
+        self._proceed_with_qnn_regressor_test(
+            dev=self.coupled_dev, coupling_map=self.coupling_map
+        )
 
     def test_qek_classifier_on_coupled_device(self) -> None:
-        self._proceed_with_qek_classifier_test(dev=self.coupled_dev)
+        """
+        Tests if the QNN classifier works correctly with the coupling map applied
+        on the real IBMQ device simulator.
+        """
+        self._proceed_with_qek_classifier_test(
+            dev=self.coupled_dev, coupling_map=self.coupling_map
+        )

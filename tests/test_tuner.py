@@ -65,7 +65,7 @@ class TestModelFinder(unittest.TestCase):
             random_state=RandomState(0),
         )
 
-        reg_x, reg_y = make_regression(
+        reg_x, reg_y = make_regression(  # pylint: disable=unbalanced-tuple-unpacking
             n_samples=10,
             n_features=2,
             n_informative=2,
@@ -129,27 +129,18 @@ class TestModelFinder(unittest.TestCase):
         Tests if `ModelFinder` finds a binary classification model.
         """
         self.binary_classifier_finder.find_model()
-        self.assertTrue(
-            True, "ModelFinder crashed while finding a binary classification model!"
-        )
 
     def test_classification_model_finding(self) -> None:
         """
         Tests if `ModelFinder` finds a linear regression model.
         """
         self.classifier_finder.find_model()
-        self.assertTrue(
-            True, "ModelFinder crashed while finding a classification model!"
-        )
 
     def test_linear_regression_model_finding(self) -> None:
         """
         Tests if `ModelFinder` finds a linear regression model.
         """
         self.linear_regressor_finder.find_model()
-        self.assertTrue(
-            True, "ModelFinder crashed while finding a linear regression model!"
-        )
 
 
 class TestHyperparameterTuner(unittest.TestCase):
@@ -196,4 +187,3 @@ class TestHyperparameterTuner(unittest.TestCase):
         Tests if `HyperparameterTuner` runs.
         """
         self.tuner.find_hyperparameters()
-        self.assertTrue(True, "HyperparameterTuner crashed during tuning!")

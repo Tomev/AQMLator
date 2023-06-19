@@ -32,10 +32,12 @@
 __author__ = "Tomasz Rybotycki"
 
 
-from typing import Tuple, List, Union, Sequence
+from typing import Tuple, List, Union, Sequence, TypeVar
 from sklearn.preprocessing import MinMaxScaler
 from aqmlator.data_acquisition import LearningDatum, SupervisedLearningDatum
 from copy import deepcopy
+
+AqmlatorDatum = TypeVar("AqmlatorDatum", LearningDatum, SupervisedLearningDatum)
 
 
 def get_attributes(
@@ -99,7 +101,7 @@ class LearningDatumMinMaxScaler:
         """
         self._feature_range = feature_range
 
-    def fit_transform(self, data: Sequence[LearningDatum]) -> Sequence[LearningDatum]:
+    def fit_transform(self, data: Sequence[AqmlatorDatum]) -> Sequence[AqmlatorDatum]:
         """
         Transforms the attributes of the `LearningDatum` objects so that they are
         within the bounds given by the `feature_range` specified in the constructor.
@@ -120,7 +122,7 @@ class LearningDatumMinMaxScaler:
             self._feature_range
         ).fit_transform(arguments)
 
-        fitted_data: Sequence[LearningDatum] = deepcopy(data)
+        fitted_data: Sequence[AqmlatorDatum] = deepcopy(data)
 
         for i in range(len(data)):
             fitted_data[i].datum_attributes = fitted_attributes[i]

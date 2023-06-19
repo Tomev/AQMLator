@@ -149,11 +149,15 @@ class TestDataPreprocessing(unittest.TestCase):
             )
 
         # Ensure attributes are within specified bounds.
-        min_value: float = min(fitted_data[0].datum_attributes)
-        max_value: float = max(fitted_data[0].datum_attributes)
+        min_value: float = min(float(i) for i in fitted_data[0].datum_attributes)
+        max_value: float = max(float(i) for i in fitted_data[0].datum_attributes)
         for i in range(1, len(fitted_data)):
-            min_value = min(min_value, min(fitted_data[i].datum_attributes))
-            max_value = max(max_value, max(fitted_data[i].datum_attributes))
+            min_value = min(
+                tuple(float(i) for i in fitted_data[i].datum_attributes) + (min_value,)
+            )
+            max_value = max(
+                tuple(float(i) for i in fitted_data[i].datum_attributes) + (max_value,)
+            )
 
         self.assertTrue(
             isclose(max_value, self._scaler_max),
@@ -180,17 +184,18 @@ class TestDataPreprocessing(unittest.TestCase):
             self._supervised_learning_data
         )
 
-        fitted_data: Sequence[LearningDatum] = self._scaler.fit_transform(
+        fitted_data: Sequence[SupervisedLearningDatum] = self._scaler.fit_transform(
             self._supervised_learning_data
         )
 
         # Check if classes are intact and if the return type is correct.
         for i in range(len(fitted_data)):
-            if isinstance(fitted_data[i], SupervisedLearningDatum):
-                self.assertTrue(
-                    self._supervised_learning_data[i].datum_target
-                    == fitted_data[i].datum_target,
-                    "Class of the fitted data has changed!",
-                )
-            else:
-                self.assertTrue(False, "Data has wrong type!")
+            self.assertTrue(
+                isinstance(fitted_data[i], SupervisedLearningDatum),
+                "Data has wrong type!",
+            )
+            self.assertTrue(
+                self._supervised_learning_data[i].datum_target
+                == fitted_data[i].datum_target,
+                "Class of the fitted data has changed!",
+            )
