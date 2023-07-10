@@ -307,8 +307,8 @@ class ModelFinder(OptunaOptimizer):
             optimizes the structure of the VQC for the model.
 
         :param trial:
-            The `optuna` Trial object used to randomize and store the results of the
-            optimization.
+            The `optuna` Trial object used to randomize and store the
+            results_reconstruction of the optimization.
 
         :return:
             The average number of calls made to the quantum device (which `optuna`
@@ -367,8 +367,8 @@ class ModelFinder(OptunaOptimizer):
         Objective function of the `optuna` optimizer for classification model finder.
 
         :param trial:
-            The `optuna` Trial object used to randomize and store the results of the
-            optimization.
+            The `optuna` Trial object used to randomize and store the
+            results_reconstruction of the optimization.
 
         :return:
             The average number of calls made to the quantum device (which `optuna`
@@ -574,8 +574,8 @@ class HyperparameterTuner(OptunaOptimizer):
         """
 
         :param trial:
-            The `optuna.trial.Trial` object used to randomize and store the results of
-            the optimization.
+            The `optuna.trial.Trial` object used to randomize and store the
+            results_reconstruction of the optimization.
         :return:
             The suggested optimizer.
         """
@@ -602,8 +602,8 @@ class HyperparameterTuner(OptunaOptimizer):
         Objective function of the `optuna` optimizer.
 
         :param trial:
-            The `optuna` Trial object used to randomize and store the results of the
-            optimization.
+            The `optuna` Trial object used to randomize and store the
+            results_reconstruction of the optimization.
         :return:
         """
         self._model.optimizer = self._suggest_optimizer(trial)

@@ -1133,8 +1133,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             Objects' features to be encoded at the input of the VQC.
 
         :return:
-            The results - classes 0 or 1 - of the classification. The data structure of
-            the returned object is `np.ndarray` with `dtype=bool`.
+            The results_reconstruction - classes 0 or 1 - of the classification.
+            The data structure of the returned object is `np.ndarray` with `dtype=bool`.
         """
         return self._classifier.predict(features_lists)
 

@@ -16,3 +16,7 @@ numpy~=1.23.5
 qiskit~=0.43.0
 setuptools==67.8.0
 lightning~=1.9.5
+
+scipy
+dimod
+tqdm

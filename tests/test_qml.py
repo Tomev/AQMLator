@@ -492,13 +492,13 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.assertTrue(
             len(mapped_x) == len(self.x),
-            f"The results number is incorrect ({len(mapped_x)} != {len(self.x)})!",
+            f"The results_reconstruction number is incorrect ({len(mapped_x)} != {len(self.x)})!",
         )
 
         for x in mapped_x:
             self.assertTrue(
                 len(np.array(x)) == self.n_qubits,
-                f"Dimension of the results is incorrect! ({len(np.array(x))} !="
+                f"Dimension of the results_reconstruction is incorrect! ({len(np.array(x))} !="
                 f" {self.n_qubits})",
             )
 
@@ -600,7 +600,7 @@ class TestQuantumClassifier(unittest.TestCase):
 
     def test_results_dimensions(self) -> None:
         """
-        Tests if the dimension of the results returned by the classifier is correct.
+        Tests if the dimension of the results_reconstruction returned by the classifier is correct.
         """
         results: Sequence[int] = self.classifier.predict(self.X)
         self.assertTrue(len(results) == self.n_samples)
