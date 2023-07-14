@@ -44,7 +44,7 @@ class LBAE(pl.LightningModule):
         out_channels: int,
         latent_space_size: int,
         num_layers: int,
-        quantize: Sequence[int],
+        quantize: bool,
         *args: Dict[str, Any],
         **kwargs: Dict[str, Any]
     ) -> None:
@@ -96,7 +96,7 @@ class LBAE(pl.LightningModule):
         """
         quant_err: Tensor
 
-        z, quant_err = self.encoder(x, self.epoch)
+        z, quant_err = self.encoder(x)
         xr: Tensor = self.decoder(z)
         # self.log("quant_error", quant_err)
         return xr

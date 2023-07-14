@@ -161,7 +161,7 @@ class LBAEEncoder(nn.Module):
         out_channels: int,
         latent_space_size: int,
         num_layers: int,
-        quantize: Sequence[int],
+        quantize: bool,
         negative_slope: float = 0.02,
         bias: bool = False,
         *args: Dict[str, Any],
@@ -227,18 +227,12 @@ class LBAEEncoder(nn.Module):
         self.quantize = quantize
         self.quant = QuantizerFunc.apply
 
-    def forward(
-        self, x: torch.Tensor, epoch: int = None, quantize: bool = False
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         A method implementing the forward pass of the LBAEEncoder class.
 
         :param x:
             The input tensor.
-        :param epoch:
-            The current epoch index.
-        :param quantize:
-            A boolean flag indicating whether to quantize the output tensor.
 
         :return:
             The output tensor.
@@ -248,7 +242,7 @@ class LBAEEncoder(nn.Module):
         x = self.linear(x)
         x = torch.tanh(x)
 
-        if epoch in self.quantize or quantize:
+        if self.quantize:
             xq: torch.Tensor = self.quant(x)
         else:
             xq = x

@@ -250,7 +250,10 @@ class RBMTrainer:
     def fit(
         self,
         rbm: RBM,
-        data_loader: DataLoader[Tuple[Tensor, Tensor]],
+        data_loader: Union[
+            DataLoader[Tuple[Tensor, Tensor]],
+            Generator[Tuple[Tensor, Tensor], Any, Any],
+        ],
         callback: Callable[[int, RBM, float], None] = None,
     ) -> None:
         """
