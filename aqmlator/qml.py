@@ -31,7 +31,16 @@
 __author__ = "Tomasz Rybotycki"
 
 import abc
+
 import torch
+from torch.utils.data import DataLoader
+from torch import Tensor
+
+from lightning.pytorch.trainer import Trainer
+
+from dimod.core.sampler import Sampler
+from numpy.typing import NDArray
+
 import random
 
 import pennylane as qml
@@ -49,6 +58,7 @@ from typing import (
     Type,
     Union,
     TypeVar,
+    Generator,
 )
 
 from sklearn.svm import SVC
@@ -61,6 +71,10 @@ from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
 from pennylane.kernels import target_alignment
 from pennylane.transforms import transpile
+
+from qbm4eo.encoder import LBAEEncoder
+from qbm4eo.lbae import LBAE
+from qbm4eo.rbm import RBM, RBMTrainer, CD1Trainer, AnnealingRBMTrainer
 
 
 ModelOutput = TypeVar("ModelOutput", float, int)
@@ -1340,3 +1354,110 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             classifier.circuit = None
 
         return predictions
+
+
+class RBMClustering:
+    """
+    A class for performing clustering using Restricted Boltzmann Machine. The RBM can
+    be trained using both classical and quantum algorithms. The quantum algorithm
+    requires the D-Wave quantum annealer to be specified.
+    """
+
+    # TODO TR:  Remember to add the D-Wave handling.
+
+    def __init__(
+        self,
+        lbae_input_size: Tuple[int, ...],
+        lbae_out_channels: int,
+        lbae_n_layers: int,
+        rmb_n_visible_neurons: int,
+        rbm_n_hidden_neurons: int,
+        n_gpus: int = 0,
+        n_epochs: int = 100,
+        learning_rate: float = 0.01,
+        qubo_scale: float = 1.0,
+        sampler: Optional[Sampler] = None,
+        fireing_threshold: float = 0.8,
+    ) -> None:
+        self.lbae: LBAE = LBAE(
+            input_size=lbae_input_size,
+            out_channels=lbae_out_channels,
+            latent_space_size=rmb_n_visible_neurons,
+            num_layers=lbae_n_layers,
+            quantize=True,  # Required, because it will be the input of the RBM.
+        )
+
+        self.rbm: RBM = RBM(
+            num_visible=rmb_n_visible_neurons, num_hidden=rbm_n_hidden_neurons
+        )
+
+        self.n_gpus: int = n_gpus
+        self.n_epochs: int = n_epochs
+        self.learning_rate: float = learning_rate
+        self.qubo_scale: float = qubo_scale
+
+        self.sampler: Optional[Sampler] = sampler
+
+        self.fireing_threshold: float = fireing_threshold
+
+    def fit(
+        self,
+        data_loader: DataLoader[Tuple[Tensor, Tensor]],
+    ) -> None:
+        lbae_trainer: Trainer = Trainer(gpus=self.n_gpus, max_epochs=self.n_epochs)
+
+        print("LBAE training start.")
+        lbae_trainer.fit(self.lbae, data_loader)
+        print("LBAE training finished.")
+
+        rbm_trainer: RBMTrainer
+        # Pick a trainer depending on the existence of the sampler.
+        if self.sampler is None:
+            rbm_trainer = CD1Trainer(
+                num_steps=self.n_epochs, learning_rate=self.learning_rate
+            )
+        else:
+            rbm_trainer = AnnealingRBMTrainer(
+                sampler=self.sampler,
+                learning_rate=self.learning_rate,
+                num_steps=self.n_epochs,
+            )
+
+        print("RBM training start.")
+        rbm_trainer.fit(
+            self.rbm, self._encoded_data_loader(data_loader, self.lbae.encoder)
+        )
+        print("RBM training finished.")
+
+    @staticmethod
+    def _encoded_data_loader(
+        data_loader: DataLoader[Tuple[Tensor, Tensor]], encoder: LBAEEncoder
+    ) -> Generator[Tuple[Tensor, Tensor], None, None]:
+        """
+        A generator that yields encoded data and targets from the given data loader. The
+        data is encoded using the given encoder.
+
+        :param data_loader:
+            Data loader to be used for generating the encoded data.
+        :param encoder:
+            LBAE Encoder to be used for encoding the data.
+
+        :return:
+            Encoded data and targets.
+        """
+        while True:
+            for batch_idx, (data, target) in enumerate(data_loader):
+                yield encoder(data)[0], target
+
+    def predict(self, x: Tensor) -> Tensor:
+        """
+        Returns the predicted class for the given input.
+
+        :param x:
+            Input to be classified.
+
+        :return:
+            Predicted class.
+        """
+        h_probs: NDArray[np.float32] = self.rbm.h_probs_given_v(self.lbae.encoder(x)[0])
+        return Tensor([1 if p > self.fireing_threshold else 0 for p in h_probs])
