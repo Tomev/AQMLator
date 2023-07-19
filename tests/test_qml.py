@@ -36,6 +36,7 @@ import abc
 import os
 
 import dill
+import lightning.pytorch.utilities.seed
 
 import pennylane as qml
 from pennylane.operation import Operation
@@ -44,19 +45,27 @@ from pennylane.measurements import ExpectationMP
 from pennylane import numpy as np
 
 import torch
+from torch import Tensor
 
-from typing import Sequence, List, Type, Optional, Union
+from typing import Sequence, List, Type, Optional, Union, Tuple
 from sklearn.datasets import make_moons, make_regression, make_classification
 from numpy import isclose
 from numpy.random import RandomState
+from numpy.typing import NDArray
 from aqmlator.qml import (
     QNNModel,
     QNNBinaryClassifier,
     QuantumKernelBinaryClassifier,
     QNNLinearRegression,
     QNNClassifier,
+    RBMClustering,
 )
 from qiskit import IBMQ
+
+from dwave.samplers import RandomSampler
+
+from sklearn.datasets import load_digits
+from sklearn.metrics import rand_score
 
 
 class TestQNNModel(unittest.TestCase, abc.ABC):
@@ -886,3 +895,125 @@ class TestIBMQDevicesHandling(unittest.TestCase):
         self._proceed_with_qek_classifier_test(
             dev=self.coupled_dev, coupling_map=self.coupling_map
         )
+
+
+class TestRBMClustering(unittest.TestCase):
+    """
+    Tests for the RBMClustering class.
+    """
+
+    def setUp(self) -> None:
+        """
+        Sets up the test case.
+        """
+        lightning.pytorch.seed_everything(0, workers=True)  # Fix the seed.
+
+        lbae_input_size: Tuple[int, ...] = (1, 8, 8)
+        lbae_out_channels: int = 8
+        n_layers: int = 2
+        rbm_n_visible_neurons: int = 16
+        rbm_n_hidden_neurons: int = 10
+
+        n_epochs: int = 3
+        batch_size: int = 10
+        n_classes: int = 10
+
+        X: NDArray[np.int]
+        self.y: NDArray[np.int]
+
+        X, self.y = load_digits(n_class=n_classes, return_X_y=True)
+        X = X.reshape((1797, 1, 8, 8))
+
+        self.X_tensor: Tensor = torch.Tensor(X)
+        self.X_tensor /= 16  # Inputs have values from 0 to 16. Rescale to 0-1.
+
+        dataset: List[Tuple[Tensor, int]] = []
+
+        for i in range(len(X)):
+            dataset.append((self.X_tensor[i], self.y[i]))
+
+        self.data_loader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+        )
+
+        self.rbm_clustering: RBMClustering = RBMClustering(
+            lbae_input_size=lbae_input_size,
+            lbae_out_channels=lbae_out_channels,
+            lbae_n_layers=n_layers,
+            rmb_n_visible_neurons=rbm_n_visible_neurons,
+            rbm_n_hidden_neurons=rbm_n_hidden_neurons,
+            n_epochs=n_epochs,
+            rng=np.random.default_rng(seed=42),
+            fireing_threshold=0.5,
+        )
+
+        self.x = self.X_tensor[0].view(1, 1, 8, 8)
+
+    def tearDown(self) -> None:
+        """
+        Tears down the test case.
+        """
+        pass
+
+    def _test_fit_run(self) -> None:
+        """
+        A common part of the tests for the fit method.
+        """
+        self.rbm_clustering.fit(self.data_loader)
+        self.assertTrue(True)
+
+    def test_classical_clustering_fit_run(self) -> None:
+        """
+        Tests if the classically trained (using CD1 algorithm) RBMs fits without error.
+        CD1 algorithm is used by default, when no sampler is specified.
+        """
+        self._test_fit_run()
+
+    def test_sampler_clustering_fit_run(self) -> None:
+        """
+        Tests if the RBMs fits without error, when the sampler is specified.
+        """
+        sampler: RandomSampler = RandomSampler()
+        self.rbm_clustering.sampler = sampler
+        self._test_fit_run()
+
+    def test_sampler_predict(self) -> None:
+        """
+        Tests if the RBMClustering predict method runs and returns binary values.
+        """
+        prediction: Tensor = self.rbm_clustering.predict(self.x)
+
+        for val in prediction:
+            self.assertTrue(val == 0 or val == 1)
+
+    def test_sampler_accuracy_increase(self) -> None:
+        """
+        Tests if the accuracy of the clustering increases after the (classical)
+        training (which it should).
+        """
+        predictions: List[int] = []
+
+        def simple_hash(t: Tensor) -> int:
+            return sum([p * 2**i for i, p in enumerate(t)])
+
+        for x in self.X_tensor:
+            predictions.append(
+                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8)))
+            )
+
+        initial_score: float = rand_score(self.y, predictions)
+
+        predictions.clear()
+
+        self.rbm_clustering.fit(self.data_loader)
+
+        for x in self.X_tensor:
+            predictions.append(
+                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8)))
+            )
+
+        final_score: float = rand_score(self.y, predictions)
+
+        self.assertGreater(final_score, initial_score)
