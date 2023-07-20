@@ -31,14 +31,35 @@
 __author__ = "Tomasz Rybotycki"
 
 import abc
+
 import torch
+from torch.utils.data import DataLoader
+from torch import Tensor
+
+from lightning.pytorch.trainer import Trainer
+
+from dimod.core.sampler import Sampler
+from numpy.typing import NDArray
+
 import random
 
 import pennylane as qml
 
 from math import prod
 from itertools import chain
-from typing import Sequence, Callable, Optional, Dict, Any, Tuple, List, Type, Union
+from typing import (
+    Sequence,
+    Callable,
+    Optional,
+    Dict,
+    Any,
+    Tuple,
+    List,
+    Type,
+    Union,
+    TypeVar,
+    Generator,
+)
 
 from sklearn.svm import SVC
 from sklearn.base import ClassifierMixin, RegressorMixin
@@ -50,6 +71,13 @@ from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
 from pennylane.kernels import target_alignment
 from pennylane.transforms import transpile
+
+from qbm4eo.encoder import LBAEEncoder
+from qbm4eo.lbae import LBAE
+from qbm4eo.rbm import RBM, RBMTrainer, CD1Trainer, AnnealingRBMTrainer
+
+
+ModelOutput = TypeVar("ModelOutput", float, int)
 
 
 class QMLModel(abc.ABC):
@@ -67,9 +95,9 @@ class QMLModel(abc.ABC):
         layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
         validation_set_size: float = 0.2,
         rng_seed: int = 42,
-        coupling_map: Optional[List[List[int]]] = None,
+        coupling_map: Optional[Sequence[Sequence[int]]] = None,
         n_qubit: Optional[int] = None,
-    ):
+    ) -> None:
         """
         The constructor for the `QMLModel` class.
 
@@ -140,7 +168,7 @@ class QMLModel(abc.ABC):
         self.optimizer: GradientDescentOptimizer = optimizer
         self.weights: Sequence[float]
 
-        self.coupling_map: Optional[List[List[int]]] = coupling_map
+        self.coupling_map: Optional[Sequence[Sequence[int]]] = coupling_map
 
         if not n_qubit:
             n_qubit = len(self.wires)
@@ -169,7 +197,7 @@ class QMLModel(abc.ABC):
     def fit(
         self,
         X: Sequence[Sequence[float]],
-        y: Sequence[int],
+        y: Sequence[ModelOutput],
     ) -> "QMLModel":
         """
         The model training method.
@@ -201,7 +229,7 @@ class QMLModel(abc.ABC):
         self._layers = [StronglyEntanglingLayers] * 2
 
     def _split_data_for_training(
-        self, X: Sequence[Sequence[float]], y: Sequence[int]
+        self, X: Sequence[Sequence[float]], y: Sequence[ModelOutput]
     ) -> None:
         """
         Splits the objects into validation and training sets. Should be called before
@@ -245,10 +273,13 @@ class QNNModel(QMLModel, abc.ABC):
         rng_seed: int = 42,
         validation_set_size: float = 0.2,
         prediction_function: Optional[
-            Callable[[Sequence[Sequence[float]]], Union[Sequence[float], Sequence[int]]]
+            Callable[
+                [Sequence[Sequence[float]]],
+                Sequence[ModelOutput],
+            ]
         ] = None,
         debug_flag: bool = True,
-        coupling_map: Optional[List[List[int]]] = None,
+        coupling_map: Optional[Sequence[Sequence[int]]] = None,
         n_qubit: Optional[int] = None,
     ) -> None:
         """
@@ -335,7 +366,7 @@ class QNNModel(QMLModel, abc.ABC):
             prediction_function = self._default_prediction_function
 
         self._prediction_function: Callable[
-            [Sequence[Sequence[float]]], Union[Sequence[float], Sequence[int]]
+            [Sequence[Sequence[float]]], Union[Sequence[int], Sequence[float]]
         ] = prediction_function
 
     def _create_circuit(self, interface: str = "autograd") -> qml.QNode:
@@ -447,22 +478,23 @@ class QNNModel(QMLModel, abc.ABC):
     @abc.abstractmethod
     def _default_prediction_function(
         self, circuit_outputs: Sequence[Sequence[float]]
-    ) -> Union[Sequence[float], Sequence[int]]:
+    ) -> Sequence[ModelOutput]:
         """
         The default prediction function that should be specified for every QNN-based
         model.
 
-        :param circuit_output:
+        :param circuit_outputs:
             The output of the VQC.
 
         :return:
             Returns prediction value for the given problem.
         """
+        pass
 
     def fit(
         self,
         X: Sequence[Sequence[float]],
-        y: Sequence[int],
+        y: Sequence[ModelOutput],
     ) -> "QNNModel":
         """
         The model training method.
@@ -496,7 +528,7 @@ class QNNModel(QMLModel, abc.ABC):
         cost: float
         batch_indices: np.tensor  # Of ints.
 
-        def _batch_cost(weights: Sequence[float]):
+        def _batch_cost(weights: Sequence[float]) -> float:
             """
             The cost function evaluated on the training data batch.
 
@@ -545,7 +577,12 @@ class QNNModel(QMLModel, abc.ABC):
         return self
 
     @abc.abstractmethod
-    def score(self, X, y, sample_weight=None) -> float:
+    def score(
+        self,
+        X: Sequence[Sequence[float]],
+        y: Sequence[Union[int, float]],
+        sample_weight: Sequence[float] = None,
+    ) -> float:
         """
         Computes and returns score of the model.
 
@@ -607,7 +644,7 @@ class QNNModel(QMLModel, abc.ABC):
 
         self.circuit = self._create_circuit()
 
-        results: Union[Sequence[float], Sequence[int]] = self._prediction_function(
+        results: Union[Sequence[int], Sequence[float]] = self._prediction_function(
             self.get_circuit_expectation_values(features)
         )
 
@@ -655,11 +692,11 @@ class QNNBinaryClassifier(ClassifierMixin, QNNModel):
 
     def _default_prediction_function(
         self, circuit_outputs: Sequence[Sequence[float]]
-    ) -> Sequence[int]:
+    ) -> Sequence[ModelOutput]:
         """
         The default prediction function of the QNNClassifier.
 
-        :param circuit_output:
+        :param circuit_outputs:
             The outputs of the VQC.
 
         :return:
@@ -707,17 +744,17 @@ class QNNLinearRegression(RegressorMixin, QNNModel):
 
     def _default_prediction_function(
         self, circuit_outputs: Sequence[Sequence[float]]
-    ) -> Sequence[float]:
+    ) -> Sequence[ModelOutput]:
         """
         The default prediction function of the QNNClassifier.
 
-        :param circuit_output:
+        :param circuit_outputs:
             The outputs of the VQC.
 
         :return:
             Returns classification prediction value for the given problem.
         """
-        predicted_values: List[float] = [
+        predicted_values: List[ModelOutput] = [
             sum(np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x)
             for x in circuit_outputs
         ]
@@ -745,7 +782,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         accuracy_threshold: float = 0.8,
         validation_set_size: float = 0.2,
         debug_flag: bool = True,
-        coupling_map: Optional[List[List[int]]] = None,
+        coupling_map: Optional[Sequence[Sequence[int]]] = None,
     ) -> None:
         """
         A constructor for the `QuantumKernelBinaryClassifier` class.
@@ -994,7 +1031,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
     def fit(
         self,
         X: Sequence[Sequence[float]],
-        y: Sequence[int],
+        y: Sequence[ModelOutput],
     ) -> "QuantumKernelBinaryClassifier":
         """
         The classifier training method.
@@ -1099,7 +1136,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         return mapped_features
 
-    def predict(self, features_lists: Sequence[Sequence[float]]) -> Sequence[int]:
+    def predict(
+        self, features_lists: Sequence[Sequence[float]]
+    ) -> Sequence[ModelOutput]:
         """
         Predicts and returns the classes of the objects for which features were given.
         It applies current `self.weights` as the parameters of VQC.
@@ -1108,8 +1147,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             Objects' features to be encoded at the input of the VQC.
 
         :return:
-            The results - classes 0 or 1 - of the classification. The data structure of
-            the returned object is `np.ndarray` with `dtype=bool`.
+            The results_reconstruction - classes 0 or 1 - of the classification.
+            The data structure of the returned object is `np.ndarray` with `dtype=bool`.
         """
         return self._classifier.predict(features_lists)
 
@@ -1240,7 +1279,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
     def fit(
         self,
         X: Sequence[Sequence[float]],
-        y: Sequence[int],
+        y: Sequence[ModelOutput],
     ) -> "QNNClassifier":
         """
         The model training method. Essentially, it fits every binary classifier to the
@@ -1282,9 +1321,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
 
         return self
 
-    def predict(
-        self, features: Sequence[Sequence[float]]
-    ) -> Union[Sequence[float], Sequence[int]]:
+    def predict(self, features: Sequence[Sequence[float]]) -> Sequence[ModelOutput]:
         """
         Returns predictions of the model for the given features. In the case of
         `QuantumClassifier`, for given features, the predicted class corresponds to the
@@ -1317,3 +1354,117 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             classifier.circuit = None
 
         return predictions
+
+
+class RBMClustering:
+    """
+    A class for performing clustering using Restricted Boltzmann Machine. The RBM can
+    be trained using both classical and quantum algorithms. The quantum algorithm
+    requires the D-Wave quantum annealer to be specified.
+    """
+
+    # TODO TR:  Remember to add the D-Wave handling.
+
+    def __init__(
+        self,
+        lbae_input_size: Tuple[int, ...],
+        lbae_out_channels: int,
+        lbae_n_layers: int,
+        rmb_n_visible_neurons: int,
+        rbm_n_hidden_neurons: int,
+        n_gpus: int = 0,
+        n_epochs: int = 100,
+        learning_rate: float = 0.01,
+        qubo_scale: float = 1.0,
+        sampler: Optional[Sampler] = None,
+        fireing_threshold: float = 0.8,
+        rng: Optional[np.random.Generator] = None,
+    ) -> None:
+        self.lbae: LBAE = LBAE(
+            input_size=lbae_input_size,
+            out_channels=lbae_out_channels,
+            latent_space_size=rmb_n_visible_neurons,
+            num_layers=lbae_n_layers,
+            quantize=True,  # Required, because it will be the input of the RBM.
+        )
+
+        self.rbm: RBM = RBM(
+            num_visible=rmb_n_visible_neurons, num_hidden=rbm_n_hidden_neurons, rng=rng
+        )
+
+        self.n_gpus: int = n_gpus
+        self.n_epochs: int = n_epochs
+        self.learning_rate: float = learning_rate
+        self.qubo_scale: float = qubo_scale
+
+        self.sampler: Optional[Sampler] = sampler
+
+        self.fireing_threshold: float = fireing_threshold
+
+    def fit(
+        self,
+        data_loader: DataLoader[Tuple[Tensor, Tensor]],
+    ) -> None:
+        lbae_trainer: Trainer = Trainer(
+            gpus=self.n_gpus, max_epochs=self.n_epochs, deterministic=True
+        )
+
+        print("LBAE training start.")
+        lbae_trainer.fit(self.lbae, data_loader)
+        print("LBAE training finished.")
+
+        rbm_trainer: RBMTrainer
+        # Pick a trainer depending on the existence of the sampler.
+        if self.sampler is None:
+            rbm_trainer = CD1Trainer(
+                num_steps=self.n_epochs, learning_rate=self.learning_rate
+            )
+        else:
+            rbm_trainer = AnnealingRBMTrainer(
+                sampler=self.sampler,
+                learning_rate=self.learning_rate,
+                num_steps=self.n_epochs,
+            )
+
+        print("RBM training start.")
+        rbm_trainer.fit(
+            self.rbm, self._encoded_data_loader(data_loader, self.lbae.encoder)
+        )
+        print("RBM training finished.")
+
+    @staticmethod
+    def _encoded_data_loader(
+        data_loader: DataLoader[Tuple[Tensor, Tensor]], encoder: LBAEEncoder
+    ) -> Generator[Tuple[Tensor, Tensor], None, None]:
+        """
+        A generator that yields encoded data and targets from the given data loader. The
+        data is encoded using the given encoder.
+
+        :param data_loader:
+            Data loader to be used for generating the encoded data.
+        :param encoder:
+            LBAE Encoder to be used for encoding the data.
+
+        :return:
+            Encoded data and targets.
+        """
+        while True:
+            for _, (data, target) in enumerate(data_loader):
+                yield encoder(data)[0], target
+
+    def predict(self, x: Tensor) -> Tensor:
+        """
+        Returns the predicted class for the given input.
+
+        :param x:
+            Input to be classified.
+
+        :return:
+            Predicted class.
+        """
+        encoded_x: Tensor = self.lbae.encoder(x)[0]
+        h_probs: NDArray[np.float32] = self.rbm.h_probs_given_v(
+            encoded_x.detach().numpy()
+        )[0]
+        # print(h_probs)
+        return Tensor([1 if p > self.fireing_threshold else 0 for p in h_probs])

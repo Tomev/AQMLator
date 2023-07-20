@@ -33,6 +33,7 @@ __author__ = "Tomasz Rybotycki"
 import unittest
 import csv
 import os
+import locale
 
 from typing import Tuple, Union, List
 
@@ -64,12 +65,19 @@ class TestDataAcquisition(unittest.TestCase):
             for i in range(len(csv_data_targets))
         ]
 
-        with open("learning_data.csv", "w", newline="") as f:
+        with open(
+            "learning_data.csv", "w", newline="", encoding=locale.getpreferredencoding()
+        ) as f:
             writer = csv.writer(f, "excel")
             for data in csv_learning_data:
                 writer.writerow(data)
 
-        with open("supervised_learning_data.csv", "w", newline="") as f:
+        with open(
+            "supervised_learning_data.csv",
+            "w",
+            newline="",
+            encoding=locale.getpreferredencoding(),
+        ) as f:
             writer = csv.writer(f, "excel")
             for i in range(len(csv_data_targets)):
                 writer.writerow(csv_learning_data[i] + [csv_data_targets[i]])
@@ -121,7 +129,7 @@ class TestDataAcquisition(unittest.TestCase):
         y: Union[float, str, int] = 1
         datum_1: SupervisedLearningDatum = SupervisedLearningDatum(x, y)
         datum_2: SupervisedLearningDatum = SupervisedLearningDatum(x, y)
-        datum_3: SupervisedLearningDatum = SupervisedLearningDatum(x, y + 1)
+        datum_3: SupervisedLearningDatum = SupervisedLearningDatum(x, int(y) + 1)
         datum_4: SupervisedLearningDatum = SupervisedLearningDatum(x2, y)
 
         self.assertTrue(
@@ -161,7 +169,7 @@ class TestDataAcquisition(unittest.TestCase):
         """
         receiver: CSVDataReceiver = CSVDataReceiver(target_index=3)
 
-        data: List[SupervisedLearningDatum] = receiver.receive_data(
+        data: List[LearningDatum] = receiver.receive_data(
             "supervised_learning_data.csv"
         )
 
