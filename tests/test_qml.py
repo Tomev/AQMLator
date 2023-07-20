@@ -46,9 +46,18 @@ from pennylane import numpy as np
 
 import torch
 from torch import Tensor
+from torch.utils.data import DataLoader
 
 from typing import Sequence, List, Type, Optional, Union, Tuple
-from sklearn.datasets import make_moons, make_regression, make_classification
+
+from sklearn.datasets import (
+    make_moons,
+    make_regression,
+    make_classification,
+    load_digits,
+)
+from sklearn.metrics import rand_score
+
 from numpy import isclose
 from numpy.random import RandomState
 from numpy.typing import NDArray
@@ -60,12 +69,10 @@ from aqmlator.qml import (
     QNNClassifier,
     RBMClustering,
 )
+
 from qiskit import IBMQ
 
 from dwave.samplers import RandomSampler
-
-from sklearn.datasets import load_digits
-from sklearn.metrics import rand_score
 
 
 class TestQNNModel(unittest.TestCase, abc.ABC):
@@ -927,13 +934,16 @@ class TestRBMClustering(unittest.TestCase):
         self.X_tensor: Tensor = torch.Tensor(X)
         self.X_tensor /= 16  # Inputs have values from 0 to 16. Rescale to 0-1.
 
-        dataset: List[Tuple[Tensor, int]] = []
+        # Use list instead of CustomDataset, as it implements everything that Dataset
+        # is supposed to implement.
+        dataset: List[Tuple[Tensor, Tensor]] = []
 
         for i in range(len(X)):
             dataset.append((self.X_tensor[i], self.y[i]))
 
-        self.data_loader = torch.utils.data.DataLoader(
-            dataset,
+        # Ignore mypy problem with the type of the dataset.
+        self.data_loader: DataLoader[Tuple[Tensor, Tensor]] = DataLoader(
+            dataset,  # type: ignore
             batch_size=batch_size,
             shuffle=True,
         )
@@ -962,7 +972,7 @@ class TestRBMClustering(unittest.TestCase):
         A common part of the tests for the fit method.
         """
         self.rbm_clustering.fit(self.data_loader)
-        self.assertTrue(True)
+        # self.assertTrue(True)
 
     def test_classical_clustering_fit_run(self) -> None:
         """
@@ -986,7 +996,7 @@ class TestRBMClustering(unittest.TestCase):
         prediction: Tensor = self.rbm_clustering.predict(self.x)
 
         for val in prediction:
-            self.assertTrue(val == 0 or val == 1)
+            self.assertTrue(val in (0, 1))
 
     def test_sampler_accuracy_increase(self) -> None:
         """
@@ -996,7 +1006,7 @@ class TestRBMClustering(unittest.TestCase):
         predictions: List[int] = []
 
         def simple_hash(t: Tensor) -> int:
-            return sum([p * 2**i for i, p in enumerate(t)])
+            return sum(p * 2**i for i, p in enumerate(t))
 
         for x in self.X_tensor:
             predictions.append(

@@ -24,9 +24,9 @@ class ResBlockDeConvPart(nn.Module):
     def __init__(
         self,
         channels: int,
+        *args: Dict[str, Any],
         negative_slope: float = 0.02,
         bias: bool = False,
-        *args: Dict[str, Any],
         **kwargs: Dict[str, Any]
     ) -> None:
         """
@@ -74,10 +74,10 @@ class ResBlockDeConv(nn.Module):
     def __init__(
         self,
         channels: int,
+        *args: Dict[str, Any],
         in_channels: Optional[int] = None,
         negative_slope: float = 0.02,
         bias: bool = False,
-        *args: Dict[str, Any],
         **kwargs: Dict[str, Any]
     ) -> None:
         """
@@ -115,8 +115,8 @@ class ResBlockDeConv(nn.Module):
         )
 
         self.middle_block: nn.Sequential = nn.Sequential(
-            ResBlockDeConvPart(channels, negative_slope, bias),
-            ResBlockDeConvPart(channels, negative_slope, bias),
+            ResBlockDeConvPart(channels, negative_slope=negative_slope, bias=bias),
+            ResBlockDeConvPart(channels, negative_slope=negative_slope, bias=bias),
         )
 
         self.negative_slope: float = negative_slope
@@ -148,9 +148,9 @@ class LBAEDecoder(nn.Module):
         output_size: Sequence[int],
         latent_space_size: int,
         num_layers: int,
+        *args: Dict[str, Any],
         negative_slope: float = 0.02,
         bias: bool = False,
-        *args: Dict[str, Any],
         **kwargs: Dict[str, Any]
     ) -> None:
         """
@@ -187,7 +187,8 @@ class LBAEDecoder(nn.Module):
         for i in range(num_layers):
             layers.append(
                 ResBlockDeConv(
-                    input_size[0] // (2 ** (i + 1)), input_size[0] // (2**i)
+                    channels=input_size[0] // (2 ** (i + 1)),
+                    in_channels=input_size[0] // (2**i),
                 )
             )
 

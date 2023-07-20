@@ -31,9 +31,12 @@ INITIAL_COEFFICIENT_SCALE: float = 0.1
 
 
 def infinite_dataloader_generator(
-    data_loader: DataLoader[Tuple[Tensor, Tensor]]
+    data_loader: Union[
+        DataLoader[Tuple[Any, Any]],
+        Generator[Tuple[Any, Any], Any, Any],
+    ]
 ) -> Generator[
-    Tuple[int, Tuple[Tensor, Tensor]], None, None
+    Tuple[Any, Any], None, None
 ]:  # https://www.linuxjournal.com/content/pythons-mypy-callables-and-generators
     """
     A generator that infinitely yields data batches from the given dataloader.
@@ -251,8 +254,8 @@ class RBMTrainer:
         self,
         rbm: RBM,
         data_loader: Union[
-            DataLoader[Tuple[Tensor, Tensor]],
-            Generator[Tuple[Tensor, Tensor], Any, Any],
+            DataLoader[Tuple[Any, Any]],
+            Generator[Tuple[Any, Any], Any, Any],
         ],
         callback: Callable[[int, RBM, float], None] = None,
     ) -> None:
@@ -266,7 +269,7 @@ class RBMTrainer:
         :param callback:
             A callback function to be called after each training step.
         """
-        for i, (_idx, (batch, target)) in enumerate(
+        for i, (_, (batch, _)) in enumerate(
             pbar := tqdm(
                 islice(infinite_dataloader_generator(data_loader), self.num_steps),
                 total=self.num_steps,

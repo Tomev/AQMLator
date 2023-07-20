@@ -1378,6 +1378,7 @@ class RBMClustering:
         qubo_scale: float = 1.0,
         sampler: Optional[Sampler] = None,
         fireing_threshold: float = 0.8,
+        rng: Optional[np.random.Generator] = None,
     ) -> None:
         self.lbae: LBAE = LBAE(
             input_size=lbae_input_size,
@@ -1388,7 +1389,7 @@ class RBMClustering:
         )
 
         self.rbm: RBM = RBM(
-            num_visible=rmb_n_visible_neurons, num_hidden=rbm_n_hidden_neurons
+            num_visible=rmb_n_visible_neurons, num_hidden=rbm_n_hidden_neurons, rng=rng
         )
 
         self.n_gpus: int = n_gpus
@@ -1404,7 +1405,9 @@ class RBMClustering:
         self,
         data_loader: DataLoader[Tuple[Tensor, Tensor]],
     ) -> None:
-        lbae_trainer: Trainer = Trainer(gpus=self.n_gpus, max_epochs=self.n_epochs)
+        lbae_trainer: Trainer = Trainer(
+            gpus=self.n_gpus, max_epochs=self.n_epochs, deterministic=True
+        )
 
         print("LBAE training start.")
         lbae_trainer.fit(self.lbae, data_loader)
@@ -1446,7 +1449,7 @@ class RBMClustering:
             Encoded data and targets.
         """
         while True:
-            for batch_idx, (data, target) in enumerate(data_loader):
+            for _, (data, target) in enumerate(data_loader):
                 yield encoder(data)[0], target
 
     def predict(self, x: Tensor) -> Tensor:
@@ -1459,5 +1462,9 @@ class RBMClustering:
         :return:
             Predicted class.
         """
-        h_probs: NDArray[np.float32] = self.rbm.h_probs_given_v(self.lbae.encoder(x)[0])
+        encoded_x: Tensor = self.lbae.encoder(x)[0]
+        h_probs: NDArray[np.float32] = self.rbm.h_probs_given_v(
+            encoded_x.detach().numpy()
+        )[0]
+        # print(h_probs)
         return Tensor([1 if p > self.fireing_threshold else 0 for p in h_probs])

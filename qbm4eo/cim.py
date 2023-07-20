@@ -33,7 +33,7 @@ def vectorize_ising(
         The j_mat is always symmetric.
     """
     num_spins = (
-        max(max(h_map.keys()), max([spin for key in j_map.keys() for spin in key])) + 1
+        max(list(h_map.keys()) + [spin for key in j_map.keys() for spin in key]) + 1
     )
 
     h_vec = np.zeros(num_spins)
@@ -53,6 +53,10 @@ def ramp(time, tau, alpha, pi, pf):
 
 
 class CIMSampler(dimod.Sampler):
+    """
+    A class implementing the CIM sampler.
+    """
+
     def __init__(self, pump, noise):
         self.pump = pump
         self.noise = noise

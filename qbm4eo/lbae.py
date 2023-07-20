@@ -8,11 +8,11 @@ Operational Programme 2014-2020, Measure 4.2 under the grant agreement no.
 POIR.04.02.00-00-D014/20-00.
 """
 
-from typing import Any, Dict, Sequence, Tuple
+from typing import Any, Dict, Tuple
 import torch
 from torch import optim, Tensor
 
-import lightning as pl
+from lightning.pytorch.core import LightningModule
 
 from .decoder import LBAEDecoder
 from .encoder import LBAEEncoder
@@ -33,7 +33,7 @@ def loss(xr: Tensor, x: Tensor) -> Tensor:
     return torch.nn.functional.mse_loss(xr, x, reduction="sum")
 
 
-class LBAE(pl.LightningModule):
+class LBAE(LightningModule):
     """
     A class implementing the Latent Bernoulli Autoencoder (LBAE) model.
     """
@@ -94,11 +94,9 @@ class LBAE(pl.LightningModule):
         :return:
             The reconstructed image.
         """
-        quant_err: Tensor
 
-        z, quant_err = self.encoder(x)
+        z, _ = self.encoder(x)
         xr: Tensor = self.decoder(z)
-        # self.log("quant_error", quant_err)
         return xr
 
     def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
@@ -128,10 +126,9 @@ class LBAE(pl.LightningModule):
 
         return l
 
-    # noinspection PyMethodOverriding
     def predict_step(
-        self, batch: Tuple[Tensor, Tensor], batch_idx: int
-    ) -> Tuple[Tensor, Tensor, Tensor]:
+        self, batch: Any, batch_idx: int, dataloader_idx: int = ...  # type: ignore
+    ) -> Any:
         """
         A function for predicting the output of the model.
 
@@ -139,6 +136,8 @@ class LBAE(pl.LightningModule):
             A batch of images.
         :param batch_idx:
             The index of the batch.
+        :param dataloader_idx:
+            The index of the dataloader.
 
         :return:
             The output of the model, the input images, and the labels.
@@ -149,7 +148,9 @@ class LBAE(pl.LightningModule):
         x, labels = batch
         return self.forward(x), x, labels
 
-    def test_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
+    def test_step(self, batch: Any, batch_idx: int) -> Any:
+        del batch_idx
+
         x, _ = batch
         xr = self.forward(x)
         return loss(xr.view(x.size()), x)
@@ -162,31 +163,3 @@ class LBAE(pl.LightningModule):
             A dictionary containing the configured optimizers.
         """
         return {"optimizer": optim.Adam(self.parameters(), lr=1e-3)}
-
-    def training_epoch_end(self, outputs: Tensor) -> None:
-        """
-        A function for logging the images during training. It is called at the end of
-        each epoch.
-
-        :param outputs:
-            The outputs of the model. Not used.
-        """
-        data_formats: str
-
-        with torch.no_grad():
-            xr = self.forward(self.reference_image)
-        if self.reference_image.size(1) > 1:
-            data_formats = "CHW"
-        else:
-            data_formats = "HW"
-        self.logger.experiment.add_image(
-            "input",
-            self.reference_image.squeeze(),
-            self.epoch,
-            dataformats=data_formats,
-        )
-        self.logger.experiment.add_image(
-            "recovery", xr.squeeze(), self.epoch, dataformats=data_formats
-        )
-        self.logger.experiment.flush()
-        self.epoch += 1

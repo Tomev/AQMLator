@@ -11,7 +11,7 @@ POIR.04.02.00-00-D014/20-00.
 import torch
 from torch import nn
 
-from typing import Tuple, Optional, Dict, Any, Sequence
+from typing import Tuple, Optional, Dict, Any
 
 
 class QuantizerFunc(torch.autograd.Function):
@@ -29,14 +29,15 @@ class QuantizerFunc(torch.autograd.Function):
 
     # noinspection PyMethodOverriding
     @staticmethod
-    def forward(ctx, input, dropout: int = 0):  # type: ignore
-        x = torch.sign(input)
+    def forward(ctx, f_input, dropout: int = 0):  # type: ignore
+        del dropout
+        x = torch.sign(f_input)
         x[x == 0] = 1
         return x
 
     # noinspection PyMethodOverriding
     @staticmethod
-    def backward(self, grad_output):  # type: ignore
+    def backward(ctx, grad_output):  # type: ignore
         grad_input = grad_output.clone()
         return grad_input, None
 
@@ -50,9 +51,9 @@ class ResBlockConvPart(nn.Module):
     def __init__(
         self,
         channels: int,
+        *args: Dict[str, Any],
         negative_slope: float = 0.02,
         bias: bool = False,
-        *args: Dict[str, Any],
         **kwargs: Dict[str, Any]
     ) -> None:
         """
@@ -97,10 +98,10 @@ class ResBlockConv(nn.Module):
     def __init__(
         self,
         channels: int,
+        *args: Dict[str, Any],
         in_channels: Optional[int] = None,
         negative_slope: float = 0.02,
         bias: bool = False,
-        *args: Dict[str, Any],
         **kwargs: Dict[str, Any]
     ) -> None:
         """
@@ -132,8 +133,8 @@ class ResBlockConv(nn.Module):
         )
 
         self.middle_block: nn.Sequential = nn.Sequential(
-            ResBlockConvPart(channels, negative_slope, bias),
-            ResBlockConvPart(channels, negative_slope, bias),
+            ResBlockConvPart(channels, negative_slope=negative_slope, bias=bias),
+            ResBlockConvPart(channels, negative_slope=negative_slope, bias=bias),
         )
         self.negative_slope: float = negative_slope
 
@@ -162,9 +163,9 @@ class LBAEEncoder(nn.Module):
         latent_space_size: int,
         num_layers: int,
         quantize: bool,
+        *args: Dict[str, Any],
         negative_slope: float = 0.02,
         bias: bool = False,
-        *args: Dict[str, Any],
         **kwargs: Dict[str, Any]
     ) -> None:
         """
@@ -199,7 +200,8 @@ class LBAEEncoder(nn.Module):
                 new_layer = ResBlockConv(out_channels)
             else:
                 new_layer = ResBlockConv(
-                    2**i * out_channels, 2 ** (i - 1) * out_channels
+                    channels=2**i * out_channels,
+                    in_channels=2 ** (i - 1) * out_channels,
                 )
             layers.append(new_layer)
 
