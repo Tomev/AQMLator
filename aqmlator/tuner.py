@@ -56,6 +56,7 @@ from aqmlator.qml import (
     QMLModel,
     QNNLinearRegression,
     QNNClassifier,
+    RBMClustering,
 )
 
 import aqmlator.database_connection as db
@@ -88,6 +89,8 @@ regressors: Dict[str, Dict[str, Any]] = {
         "constructor": QNNLinearRegression,
     }
 }
+
+clustering: Dict[str, Dict[str, Any]] = {"RBM": RBMClustering}
 
 data_embeddings: Dict[str, Dict[str, Any]] = {
     "ANGLE": {"constructor": AngleEmbedding, "kwargs": {}, "fixed_kwargs": {}},
@@ -137,6 +140,7 @@ class MLTaskType(StrEnum):
     BINARY_CLASSIFICATION: str = "BINARY_CLASSIFICATION"
     CLASSIFICATION: str = "CLASSIFICATION"
     REGRESSION: str = "REGRESSION"
+    GROUPING: str = "GROUPING"
 
 
 class OptunaOptimizer(abc.ABC):
@@ -212,6 +216,7 @@ class ModelFinder(OptunaOptimizer):
         n_epochs: int = 10,
         n_seeds: int = 5,
         coupling_map: Optional[List[List[int]]] = None,
+        d_wave_access: bool = False,
     ):
         """
         A constructor for `ModelFinder` class.
@@ -269,6 +274,7 @@ class ModelFinder(OptunaOptimizer):
             MLTaskType.BINARY_CLASSIFICATION: self._simple_model_objective_function,
             MLTaskType.CLASSIFICATION: self._classification_objective_function,
             MLTaskType.REGRESSION: self._simple_model_objective_function,
+            MLTaskType.GROUPING: self._grouping_model_objective_function,
         }
 
         self._optuna_postfix: str = ""
@@ -320,15 +326,28 @@ class ModelFinder(OptunaOptimizer):
             "model_type" + self._optuna_postfix, list(self._models_dict)
         )
 
-        kwargs: Dict[str, Any] = self._suggest_model_kwargs(trial, model_type)
+        kwargs: Dict[str, Any] = self._suggest_supervised_model_kwargs(
+            trial, model_type
+        )
 
         model: QMLModel = self._models_dict[model_type]["constructor"](**kwargs)
 
         return self._evaluate_model(model)
 
+    def _grouping_model_objective_function(self, trial: optuna.trial.Trial) -> float:
+        # TODO TR: Check clustering metrics.
+        # TODO TR: Maybe separate class for clustering?
+        self._initialize_model_dict()
+
+        model_type: str = trial.suggest_categorical(
+            "model_type" + self._optuna_postfix, list(self._models_dict)
+        )
+
+        return 0
+
     def _initialize_model_dict(self) -> None:
         """
-        Initializes the models dict used during
+        Initializes the models dict used during the model finding.
 
         :Note:
             The (non-binary) classification task uses binary classification dict to
@@ -338,6 +357,9 @@ class ModelFinder(OptunaOptimizer):
 
         if self._task_type == MLTaskType.REGRESSION:
             self._models_dict = regressors
+
+        if self._task_type == MLTaskType.GROUPING:
+            self._models_dict = clustering
 
     def _evaluate_model(self, model: QMLModel) -> float:
         """
@@ -383,7 +405,7 @@ class ModelFinder(OptunaOptimizer):
         for i in range(n_classes):
             self._optuna_postfix = f"_({i})"
 
-            kwargs: Dict[str, Any] = self._suggest_model_kwargs(trial, "QNN")
+            kwargs: Dict[str, Any] = self._suggest_supervised_model_kwargs(trial, "QNN")
 
             binary_classifiers_kwargs.append(kwargs)
 
@@ -404,7 +426,7 @@ class ModelFinder(OptunaOptimizer):
 
         return self._evaluate_model(classifier)
 
-    def _suggest_model_kwargs(
+    def _suggest_supervised_model_kwargs(
         self, trial: optuna.trial.Trial, model_type: str
     ) -> Dict[str, Any]:
         """
@@ -443,6 +465,13 @@ class ModelFinder(OptunaOptimizer):
 
         self._suggest_embedding(trial, kwargs)
         self._suggest_layers(trial, kwargs)
+
+        return kwargs
+
+    def _suggest_unsupervised_model_kwargs(
+        self, trial: optuna.trial.Trial
+    ) -> Dict[str, Any]:
+        kwargs: [str, Any] = {}
 
         return kwargs
 
