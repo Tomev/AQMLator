@@ -39,8 +39,11 @@ import pennylane as qml
 import pennylane.numpy as np
 
 from optuna.samplers import TPESampler
-from typing import Sequence, List, Dict, Any, Type, Callable, Optional
+from torch.utils.data import DataLoader
+from typing import Sequence, List, Dict, Any, Type, Callable, Optional, Tuple
 from enum import StrEnum
+
+from math import ceil, floor, sqrt, prod
 
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.templates.layers import StronglyEntanglingLayers, BasicEntanglerLayers
@@ -60,6 +63,8 @@ from aqmlator.qml import (
 )
 
 import aqmlator.database_connection as db
+
+from sklearn.metrics import silhouette_score  # TR: It has bounds.
 
 # TODO TR:  Should those be global?
 
@@ -90,7 +95,15 @@ regressors: Dict[str, Dict[str, Any]] = {
     }
 }
 
-clustering: Dict[str, Dict[str, Any]] = {"RBM": RBMClustering}
+clustering: Dict[str, Dict[str, Any]] = {
+    "RBM": {
+        "constructor": RBMClustering,
+        "kwargs": {
+            "lbae_n_layers": (1, 2),  # TR: lbae_n_layers > 2 poses problems.
+            "fireing_threshold": (0.6, 0.99),
+        },
+    }
+}
 
 data_embeddings: Dict[str, Dict[str, Any]] = {
     "ANGLE": {"constructor": AngleEmbedding, "kwargs": {}, "fixed_kwargs": {}},
@@ -152,7 +165,7 @@ class OptunaOptimizer(abc.ABC):
     def __init__(
         self,
         features: Sequence[Sequence[float]],
-        classes: Sequence[int],
+        classes: Optional[Sequence[int]],
         study_name: str = "",
         add_uuid: bool = True,
         n_trials: int = 10,
@@ -181,7 +194,7 @@ class OptunaOptimizer(abc.ABC):
             Number of seeds checked per `optuna` trial.
         """
         self._x: Sequence[Sequence[float]] = features
-        self._y: Sequence[int] = classes
+        self._y: Optional[Sequence[int]] = classes
 
         self._study_name: str = study_name
 
@@ -202,12 +215,17 @@ class ModelFinder(OptunaOptimizer):
     A class for finding the best QNN model for given data and task.
     """
 
+    # TODO TR:  Make it so that the supervised and unsupervised learning parts use
+    #           the same pipeline.
+
+    # TODO TR:  Maybe separate class for clustering?
+
     def __init__(
         self,
         task_type: str,
         features: Sequence[Sequence[float]],
-        classes: Sequence[int],
-        device: qml.Device,
+        classes: Optional[Sequence[int]] = None,
+        device: Optional[qml.Device] = None,
         study_name: str = "QML_Model_Finder_",
         add_uuid: bool = True,
         minimal_accuracy: float = 0.8,
@@ -247,6 +265,8 @@ class ModelFinder(OptunaOptimizer):
             Number of seeds checked per `optuna` trial.
         :param coupling_map:
             A list of connected qubits.
+        :param d_wave_access:
+            Flag for specifying if the model could be run on the D-Wave machine.
         """
         super().__init__(
             features=features,
@@ -281,6 +301,8 @@ class ModelFinder(OptunaOptimizer):
 
         self.dev: qml.Device = device
         self.device_coupling_map: Optional[List[List[int]]] = coupling_map
+
+        self.d_wave_access = d_wave_access
 
     def find_model(self) -> None:
         """
@@ -332,18 +354,32 @@ class ModelFinder(OptunaOptimizer):
 
         model: QMLModel = self._models_dict[model_type]["constructor"](**kwargs)
 
-        return self._evaluate_model(model)
+        return self._evaluate_supervised_model(model)
 
     def _grouping_model_objective_function(self, trial: optuna.trial.Trial) -> float:
-        # TODO TR: Check clustering metrics.
-        # TODO TR: Maybe separate class for clustering?
+        """
+        Objective function of the `optuna` optimizer for grouping model finder.
+
+        :param trial:
+            The `optuna` Trial object used to randomize and store the values
+            used in the optimization.
+
+        :return:
+            The average clustering score obtained by the model.
+        """
         self._initialize_model_dict()
 
         model_type: str = trial.suggest_categorical(
             "model_type" + self._optuna_postfix, list(self._models_dict)
         )
 
-        return 0
+        kwargs: Dict[str, Any] = self._suggest_unsupervised_model_kwargs(
+            trial, model_type
+        )
+
+        model: RBMClustering = self._models_dict[model_type]["constructor"](**kwargs)
+
+        return self._evaluate_unsupervised_model(model)
 
     def _initialize_model_dict(self) -> None:
         """
@@ -361,7 +397,46 @@ class ModelFinder(OptunaOptimizer):
         if self._task_type == MLTaskType.GROUPING:
             self._models_dict = clustering
 
-    def _evaluate_model(self, model: QMLModel) -> float:
+    def _evaluate_unsupervised_model(self, model: RBMClustering) -> float:
+        """
+        Evaluates the performance of the given model. The evaluation is based on the
+        Silhouette score (which takes values from [-1, 1]). The higher the score, the
+        better the model.
+
+        :param model:
+            A `RBMClustering` model to evaluate.
+
+        :return:
+            The average Silhouette score obtained by the model.
+        """
+        score: float = 0
+        score_x = np.array(self._x).reshape(len(self._x), int(prod(self._x[0].shape)))
+
+        data: Sequence[Tuple[Sequence[float], int]] = [(val, -1) for val in self._x]
+
+        data_loader: DataLoader[Sequence[Tuple[Sequence[float], int]]] = DataLoader(
+            data
+        )
+
+        for seed in range(self._n_seeds):
+            model.rbm.rng = np.random.MT19937(seed)
+
+            model.fit(data_loader)
+
+            labels = [tuple(model.predict(val[0])) for val in data_loader]
+            groups = list(set(labels))
+            labels = [groups.index(label) for label in labels]
+
+            # Protect against all objects being in the same group. Remember that optuna
+            # aim to MINIMIZE the objective function!
+            if len(set(labels)) > 1:
+                score -= silhouette_score(score_x, labels)
+            else:
+                score += 1
+
+        return score / self._n_seeds
+
+    def _evaluate_supervised_model(self, model: QMLModel) -> float:
         """
         Evaluates the performance of the given model. The evaluation is based on the
         number of calls to the quantum machine (which are _expensive_) during the
@@ -424,7 +499,7 @@ class ModelFinder(OptunaOptimizer):
 
         self._optuna_postfix = ""
 
-        return self._evaluate_model(classifier)
+        return self._evaluate_supervised_model(classifier)
 
     def _suggest_supervised_model_kwargs(
         self, trial: optuna.trial.Trial, model_type: str
@@ -469,9 +544,58 @@ class ModelFinder(OptunaOptimizer):
         return kwargs
 
     def _suggest_unsupervised_model_kwargs(
-        self, trial: optuna.trial.Trial
+        self, trial: optuna.trial.Trial, model_type: str
     ) -> Dict[str, Any]:
-        kwargs: [str, Any] = {}
+        """
+        Suggests the kwargs for the specified (unsupervised learning) model.
+
+        :param trial:
+            An optuna trial object for parameters selection.
+        :param model_type:
+            A string describing the type of the model. Note that the
+            `self._models_dict` has to be initialized properly, prior to calling
+            this method.
+
+        :return:
+            Returns the suggested kwargs for the selected model type.
+        """
+        # TR: The input shape has to be of form (1, actual_shape).
+        lbae_input_shape: Tuple[int] = (1,) + np.array(self._x[0]).shape
+        lbae_input_size: int = prod(lbae_input_shape)
+
+        kwargs: Dict[str, Any] = {
+            "lbae_input_shape": lbae_input_shape,
+            "lbae_out_channels": trial.suggest_int(
+                name="lbae_out_channels",
+                low=floor(sqrt(lbae_input_size)),
+                high=ceil(0.75 * lbae_input_size),
+            ),
+        }
+
+        kwargs["rmb_n_visible_neurons"] = kwargs["lbae_out_channels"]
+
+        kwargs["rbm_n_hidden_neurons"] = trial.suggest_int(
+            name="rbm_n_hidden_neurons",
+            low=floor(sqrt(kwargs["lbae_out_channels"])),
+            high=ceil(0.75 * kwargs["lbae_out_channels"]),
+        )  # Heuristic.
+
+        # TR: Might need to be extended for different arguments type at some point.
+        kwargs_data: Dict[str, Any] = self._models_dict[model_type]["kwargs"]
+
+        kwargs["lbae_n_layers"] = trial.suggest_int(
+            "lbae_n_layers" + self._optuna_postfix,
+            kwargs_data["lbae_n_layers"][0],
+            kwargs_data["lbae_n_layers"][1],
+        )
+
+        kwargs["fireing_threshold"] = trial.suggest_float(
+            "fireing_threshold" + self._optuna_postfix,
+            kwargs_data["fireing_threshold"][0],
+            kwargs_data["fireing_threshold"][1],
+        )
+
+        kwargs["n_epochs"] = self._n_epochs
 
         return kwargs
 
@@ -532,6 +656,9 @@ class ModelFinder(OptunaOptimizer):
 class HyperparameterTuner(OptunaOptimizer):
     """
     This class contains the optuna-based tuner for ML Training hyperparameters.
+
+    TODO TR:    Consider renaming this class, as it's only used by the supervised
+                learning models (as of now).
     """
 
     def __init__(
@@ -643,7 +770,10 @@ class HyperparameterTuner(OptunaOptimizer):
         for _ in range(self._n_seeds):
             initial_executions = self._model.n_executions()
             self._model.weights = np.zeros_like(self._model.weights)
-            self._model.fit(self._x, self._y)
+
+            if self._y is not None:
+                self._model.fit(self._x, self._y)
+
             executions_sum += self._model.n_executions() - initial_executions
 
         return executions_sum / self._n_seeds

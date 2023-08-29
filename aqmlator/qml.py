@@ -1367,7 +1367,7 @@ class RBMClustering:
 
     def __init__(
         self,
-        lbae_input_size: Tuple[int, ...],
+        lbae_input_shape: Tuple[int, ...],
         lbae_out_channels: int,
         lbae_n_layers: int,
         rmb_n_visible_neurons: int,
@@ -1381,7 +1381,7 @@ class RBMClustering:
         rng: Optional[np.random.Generator] = None,
     ) -> None:
         self.lbae: LBAE = LBAE(
-            input_size=lbae_input_size,
+            input_size=lbae_input_shape[1:],  # TR: Notice shape reduction.
             out_channels=lbae_out_channels,
             latent_space_size=rmb_n_visible_neurons,
             num_layers=lbae_n_layers,

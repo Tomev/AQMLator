@@ -239,6 +239,11 @@ class RBM:
 class RBMTrainer:
     """
     A base class for implementing the RBM training algorithms.
+
+    TODO TR:    There are some nasty casting between np.matrix and np.ndarray that
+                is there to ensure proper transposition or multiplications when one
+                of the matrix dimension is 1. This probable could be done more
+                elegantly.
     """
 
     def __init__(self, num_steps: int) -> None:
@@ -275,10 +280,10 @@ class RBMTrainer:
                 total=self.num_steps,
             )
         ):
-            batch = batch.detach().cpu().numpy().squeeze()
+            batch = np.matrix(batch.detach().cpu().numpy().squeeze())
             self.training_step(rbm, batch)
             loss: float = (
-                ((batch - rbm.reconstruct(batch)) ** 2).sum()
+                (np.array(batch - rbm.reconstruct(batch)) ** 2).sum()
                 / batch.shape[0]
                 / batch.shape[1]
             )
@@ -403,18 +408,18 @@ class CD1Trainer(RBMTrainer):
             The RBMs' visible layer neurons' states.
         """
         # Conditional probabilities given visible batch input
-        hidden_1: NDArray[np.float32] = rbm.h_probs_given_v(batch)
+        hidden_1: NDArray[np.float32] = np.matrix(rbm.h_probs_given_v(batch))
 
         # Propagate hidden -> visible -> hidden again
         visible_2: NDArray[np.float32] = rbm.v_probs_given_h(hidden_1)
-        hidden_2: NDArray[np.float32] = rbm.h_probs_given_v(visible_2)
+        hidden_2: NDArray[np.float32] = np.matrix(rbm.h_probs_given_v(visible_2))
 
         # Update weights
-        rbm.weights += (
+        rbm.weights += np.array(
             self.learning_rate
-            * (batch.T @ hidden_1 - visible_2.T @ hidden_2)
+            * (np.matrix(batch).T @ hidden_1 - np.matrix(visible_2).T @ hidden_2)
             / len(batch)
         )
         # And biases
-        rbm.v_bias += self.learning_rate * (batch - visible_2).sum(axis=0)
-        rbm.h_bias += self.learning_rate * (hidden_1 - hidden_2).sum(axis=0)
+        rbm.v_bias += self.learning_rate * np.array(batch - visible_2).sum(axis=0)
+        rbm.h_bias += self.learning_rate * np.array(hidden_1 - hidden_2).sum(axis=0)

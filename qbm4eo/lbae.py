@@ -114,7 +114,7 @@ class LBAE(LightningModule):
 
         x: Tensor
 
-        x, _ = batch
+        x = batch[0]
 
         if self.epoch == 0 and batch_idx == 0:
             self.reference_image = x[0:1, :, :, :]
