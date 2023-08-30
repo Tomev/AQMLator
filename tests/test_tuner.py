@@ -33,10 +33,17 @@ __author__ = "Tomasz Rybotycki"
 import unittest
 
 from typing import Sequence
+import numpy as np
+from numpy.typing import NDArray
 
 from aqmlator.tuner import ModelFinder, HyperparameterTuner, MLTaskType
 from aqmlator.qml import QNNBinaryClassifier
-from sklearn.datasets import make_moons, make_regression, make_classification
+from sklearn.datasets import (
+    make_moons,
+    make_regression,
+    make_classification,
+    load_digits,
+)
 from numpy.random import RandomState
 import pennylane as qml
 
@@ -124,6 +131,23 @@ class TestModelFinder(unittest.TestCase):
             device=dev,
         )
 
+        n_classes: int = 2
+        grp_x: NDArray[int]
+        grp_x, _ = load_digits(n_class=n_classes, return_X_y=True)
+        grp_x = grp_x.reshape(len(grp_x), 1, 8, 8)
+        grp_x /= 16
+
+        grp_x = grp_x.astype(np.float32)
+
+        self.grouping_model_finder: ModelFinder = ModelFinder(
+            task_type=MLTaskType.GROUPING,
+            features=grp_x,
+            n_cores=1,
+            n_trials=n_trials,
+            n_seeds=n_seeds,
+            n_epochs=n_epochs,
+        )
+
     def test_binary_classification_model_finding(self) -> None:
         """
         Tests if `ModelFinder` finds a binary classification model.
@@ -141,6 +165,12 @@ class TestModelFinder(unittest.TestCase):
         Tests if `ModelFinder` finds a linear regression model.
         """
         self.linear_regressor_finder.find_model()
+
+    def test_grouping_model_finding(self) -> None:
+        """
+        Tests if `ModelFinder` finds a grouping model.
+        """
+        self.grouping_model_finder.find_model()
 
 
 class TestHyperparameterTuner(unittest.TestCase):

@@ -949,7 +949,7 @@ class TestRBMClustering(unittest.TestCase):
         )
 
         self.rbm_clustering: RBMClustering = RBMClustering(
-            lbae_input_size=lbae_input_size,
+            lbae_input_shape=lbae_input_size,
             lbae_out_channels=lbae_out_channels,
             lbae_n_layers=n_layers,
             rmb_n_visible_neurons=rbm_n_visible_neurons,
