@@ -149,6 +149,12 @@ layer_types: Dict[str, Dict[str, Any]] = {
 }
 
 
+import requests
+import json
+
+endpoint: str = "http://127.0.0.1:8000/get_data"
+
+
 class MLTaskType(StrEnum):
     BINARY_CLASSIFICATION: str = "BINARY_CLASSIFICATION"
     CLASSIFICATION: str = "CLASSIFICATION"
@@ -196,10 +202,10 @@ class OptunaOptimizer(abc.ABC):
         self._x: Sequence[Sequence[float]] = features
         self._y: Optional[Sequence[int]] = classes
 
-        self._study_name: str = study_name
+        self.study_name: str = study_name
 
         if add_uuid:
-            self._study_name += str(uuid.uuid1())
+            self.study_name += str(uuid.uuid1())
 
         self._n_trials: int = n_trials
         self._n_cores: int = n_cores
@@ -302,19 +308,22 @@ class ModelFinder(OptunaOptimizer):
         self.dev: qml.Device = device
         self.device_coupling_map: Optional[List[List[int]]] = coupling_map
 
-        self.d_wave_access = d_wave_access
+        self.d_wave_access: bool = d_wave_access
+
+        requests.post(endpoint, data=json.dumps({self.study_name: "Waiting..."}))
 
     def find_model(self) -> None:
         """
         Finds the QNN model that best fits the given data.
         """
+        requests.post(endpoint, data=json.dumps({self.study_name: "Tuning..."}))
         sampler: TPESampler = TPESampler(
             seed=0, multivariate=True, group=True  # For experiments repeatability.
         )
 
         study: optuna.study.Study = optuna.create_study(
             sampler=sampler,
-            study_name=self._study_name,
+            study_name=self.study_name,
             load_if_exists=True,
             storage=self._get_storage(),
         )
@@ -324,6 +333,7 @@ class ModelFinder(OptunaOptimizer):
             n_trials=self._n_trials,
             n_jobs=self._n_cores,
         )
+        requests.post(endpoint, data=json.dumps({self.study_name: "Done."}))
 
     def _simple_model_objective_function(self, trial: optuna.trial.Trial) -> float:
         """
@@ -652,6 +662,9 @@ class ModelFinder(OptunaOptimizer):
         kwargs["layers"] = layers
         kwargs.pop("n_layers")
 
+    def __del__(self) -> None:
+        requests.post(endpoint, data=json.dumps({self.study_name: "Delete"}))
+
 
 class HyperparameterTuner(OptunaOptimizer):
     """
@@ -716,7 +729,7 @@ class HyperparameterTuner(OptunaOptimizer):
 
         study: optuna.study.Study = optuna.create_study(
             sampler=sampler,
-            study_name=self._study_name,
+            study_name=self.study_name,
             load_if_exists=True,
             storage=self._get_storage(),
         )
