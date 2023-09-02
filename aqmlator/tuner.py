@@ -34,8 +34,10 @@ __author__ = "Tomasz Rybotycki"
 import abc
 import uuid
 import optuna
-import pennylane as qml
+import requests
+import json
 
+import pennylane as qml
 import pennylane.numpy as np
 
 from optuna.samplers import TPESampler
@@ -63,6 +65,7 @@ from aqmlator.qml import (
 )
 
 import aqmlator.database_connection as db
+from aqmlator.server import status_update_endpoint
 
 from sklearn.metrics import silhouette_score  # TR: It has bounds.
 
@@ -147,12 +150,6 @@ layer_types: Dict[str, Dict[str, Any]] = {
         "constructor": StronglyEntanglingLayers,
     },
 }
-
-
-import requests
-import json
-
-endpoint: str = "http://127.0.0.1:8000/get_data"
 
 
 class MLTaskType(StrEnum):
@@ -310,13 +307,17 @@ class ModelFinder(OptunaOptimizer):
 
         self.d_wave_access: bool = d_wave_access
 
-        requests.post(endpoint, data=json.dumps({self.study_name: "Waiting..."}))
+        requests.post(
+            status_update_endpoint, data=json.dumps({self.study_name: "Waiting..."})
+        )
 
     def find_model(self) -> None:
         """
         Finds the QNN model that best fits the given data.
         """
-        requests.post(endpoint, data=json.dumps({self.study_name: "Tuning..."}))
+        requests.post(
+            status_update_endpoint, data=json.dumps({self.study_name: "Tuning..."})
+        )
         sampler: TPESampler = TPESampler(
             seed=0, multivariate=True, group=True  # For experiments repeatability.
         )
@@ -333,7 +334,9 @@ class ModelFinder(OptunaOptimizer):
             n_trials=self._n_trials,
             n_jobs=self._n_cores,
         )
-        requests.post(endpoint, data=json.dumps({self.study_name: "Done."}))
+        requests.post(
+            status_update_endpoint, data=json.dumps({self.study_name: "Done."})
+        )
 
     def _simple_model_objective_function(self, trial: optuna.trial.Trial) -> float:
         """
@@ -663,7 +666,9 @@ class ModelFinder(OptunaOptimizer):
         kwargs.pop("n_layers")
 
     def __del__(self) -> None:
-        requests.post(endpoint, data=json.dumps({self.study_name: "Delete"}))
+        requests.post(
+            status_update_endpoint, data=json.dumps({self.study_name: "Delete"})
+        )
 
 
 class HyperparameterTuner(OptunaOptimizer):

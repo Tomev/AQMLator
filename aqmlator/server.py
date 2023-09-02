@@ -38,13 +38,15 @@ from typing import Dict
 app: FastAPI = FastAPI()
 
 status_data: Dict[str, str] = {}
-status_point_endpoint: str = "/status"
+
+port: str = "8000"
+address: str = "127.0.0.1"
+status_update_endpoint: str = f"http://{address}:{port}/update_status"
 
 
+@app.get("/status")
 def status() -> Response:
     content: str = ""
-
-    print(status_data)
 
     if not status_data:
         content += "No running tuners!"
@@ -55,7 +57,7 @@ def status() -> Response:
     return Response(status_code=200, content=content)
 
 
-@app.post("/get_data")
+@app.post("/update_status")
 async def get_data(data: Dict[str, str]) -> Response:
     for k in data:
         if data[k] == "Delete":
@@ -65,7 +67,7 @@ async def get_data(data: Dict[str, str]) -> Response:
     return Response(status_code=200, content="Status updated!")
 
 
-app.add_api_route("/status", status, methods=["GET"])
+# app.add_api_route("/status", status, methods=["GET"])
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)

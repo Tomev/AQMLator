@@ -21,3 +21,6 @@ scipy
 dimod
 tqdm
 dwave-system
+
+fastapi
+uvicorn
