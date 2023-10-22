@@ -132,7 +132,7 @@ class TestModelFinder(unittest.TestCase):
         )
 
         n_classes: int = 2
-        grp_x: NDArray[int]
+        grp_x: NDArray[np.float32]
         grp_x, _ = load_digits(n_class=n_classes, return_X_y=True)
         grp_x = grp_x.reshape(len(grp_x), 1, 8, 8)
         grp_x /= 16

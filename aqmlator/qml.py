@@ -188,8 +188,8 @@ class QMLModel(abc.ABC):
     @abc.abstractmethod
     def fit(
         self,
-        X: Sequence[Sequence[float]],
-        y: Sequence[ModelOutput],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Optional[Sequence[ModelOutput]],
     ) -> "QMLModel":
         """
         The model training method.
@@ -221,7 +221,9 @@ class QMLModel(abc.ABC):
         self._layers = [StronglyEntanglingLayers] * 2
 
     def _split_data_for_training(
-        self, X: Sequence[Sequence[float]], y: Sequence[ModelOutput]
+        self,
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Sequence[ModelOutput],
     ) -> None:
         """
         Splits the objects into validation and training sets. Should be called before
@@ -485,8 +487,8 @@ class QNNModel(QMLModel, abc.ABC):
 
     def fit(
         self,
-        X: Sequence[Sequence[float]],
-        y: Sequence[ModelOutput],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Optional[Sequence[ModelOutput]],
     ) -> "QNNModel":
         """
         The model training method.
@@ -504,6 +506,9 @@ class QNNModel(QMLModel, abc.ABC):
 
         if not self.dev:
             raise AttributeError("Specify the device (dev) before fitting.")
+
+        if y is None:
+            raise AttributeError("Missing y in supervised learning model.")
 
         self.circuit = self._create_circuit()
 
@@ -705,7 +710,7 @@ class QNNLinearRegression(RegressorMixin, QNNModel):
     def _cost(
         self,
         weights: Sequence[float],
-        X: Sequence[Sequence[float]],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
         y: Sequence[int],
     ) -> float:
         """
@@ -1022,8 +1027,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
     def fit(
         self,
-        X: Sequence[Sequence[float]],
-        y: Sequence[ModelOutput],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Optional[Sequence[ModelOutput]],
     ) -> "QuantumKernelBinaryClassifier":
         """
         The classifier training method.
@@ -1042,6 +1047,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         if not self.dev:
             raise AttributeError("Specify the device (dev) before fitting.")
+
+        if y is None:
+            raise AttributeError("Missing y in supervised learning model.")
 
         kernel: Callable[
             [Sequence[float], Sequence[float], Sequence[float]], float
@@ -1270,8 +1278,8 @@ class QNNClassifier(QMLModel, ClassifierMixin):
 
     def fit(
         self,
-        X: Sequence[Sequence[float]],
-        y: Sequence[ModelOutput],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Optional[Sequence[ModelOutput]],
     ) -> "QNNClassifier":
         """
         The model training method. Essentially, it fits every binary classifier to the
@@ -1288,6 +1296,9 @@ class QNNClassifier(QMLModel, ClassifierMixin):
 
         if not self.dev:
             raise AttributeError("Specify the device (dev) before fitting.")
+
+        if y is None:
+            raise AttributeError("Missing y in supervised learning model.")
 
         # Check if there's a binary classifier for each class.
         unique_classes: np.ndarray = np.unique(y)

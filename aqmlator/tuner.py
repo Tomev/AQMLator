@@ -35,11 +35,12 @@ import abc
 import uuid
 from enum import StrEnum
 from math import ceil, floor, prod, sqrt
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import optuna
 import pennylane as qml
 import pennylane.numpy as np
+from numpy.typing import NDArray
 from optuna.samplers import TPESampler
 from pennylane.optimize import (
     AdamOptimizer,
@@ -49,6 +50,7 @@ from pennylane.optimize import (
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.templates.layers import BasicEntanglerLayers, StronglyEntanglingLayers
 from sklearn.metrics import silhouette_score  # TR: It has bounds.
+from torch import Tensor
 from torch.utils.data import DataLoader
 
 import aqmlator.database_connection as db
@@ -159,7 +161,7 @@ class OptunaOptimizer(abc.ABC):
 
     def __init__(
         self,
-        features: Sequence[Sequence[float]],
+        features: Union[Sequence[Sequence[float]], NDArray[np.float32]],
         classes: Optional[Sequence[int]],
         study_name: str = "",
         add_uuid: bool = True,
@@ -188,7 +190,7 @@ class OptunaOptimizer(abc.ABC):
         :param n_seeds:
             Number of seeds checked per `optuna` trial.
         """
-        self._x: Sequence[Sequence[float]] = features
+        self._x: Union[Sequence[Sequence[float]], NDArray[np.float32]] = features
         self._y: Optional[Sequence[int]] = classes
 
         self._study_name: str = study_name
@@ -218,7 +220,7 @@ class ModelFinder(OptunaOptimizer):
     def __init__(
         self,
         task_type: str,
-        features: Sequence[Sequence[float]],
+        features: Union[Sequence[Sequence[float]], NDArray[np.float32]],
         classes: Optional[Sequence[int]] = None,
         device: Optional[qml.Device] = None,
         study_name: str = "QML_Model_Finder_",
@@ -405,12 +407,17 @@ class ModelFinder(OptunaOptimizer):
             The average Silhouette score obtained by the model.
         """
         score: float = 0
-        score_x = np.array(self._x).reshape(len(self._x), int(prod(self._x[0].shape)))
+        score_x = np.array(self._x).reshape(
+            len(self._x), int(prod(np.array(self._x[0]).shape))
+        )
 
-        data: Sequence[Tuple[Sequence[float], int]] = [(val, -1) for val in self._x]
+        data: Sequence[Tuple[Tensor, Tensor]] = [
+            (Tensor(val), Tensor(-1)) for val in self._x
+        ]
 
-        data_loader: DataLoader[Sequence[Tuple[Sequence[float], int]]] = DataLoader(
-            data
+        # Type ignore the following line, because Torch isn't type-hinted well enough.
+        data_loader: DataLoader[Tuple[Tensor, Tensor]] = DataLoader(
+            data  # type: ignore
         )
 
         for seed in range(self._n_seeds):
@@ -418,14 +425,16 @@ class ModelFinder(OptunaOptimizer):
 
             model.fit(data_loader)
 
-            labels = [tuple(model.predict(val[0])) for val in data_loader]
-            groups = list(set(labels))
-            labels = [groups.index(label) for label in labels]
+            labels: List[Tuple[int, ...]] = [
+                tuple(model.predict(val[0])) for val in data_loader
+            ]
+            group_labels: List[Tuple[int, ...]] = list(set(labels))
+            groups: List[int] = [group_labels.index(label) for label in labels]
 
             # Protect against all objects being in the same group. Remember that optuna
             # aim to MINIMIZE the objective function!
-            if len(set(labels)) > 1:
-                score -= silhouette_score(score_x, labels)
+            if len(set(groups)) > 1:
+                score -= silhouette_score(score_x, groups)
             else:
                 score += 1
 
