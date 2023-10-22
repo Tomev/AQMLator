@@ -9,10 +9,10 @@ POIR.04.02.00-00-D014/20-00.
 """
 
 from typing import Any, Dict, Tuple
-import torch
-from torch import optim, Tensor
 
+import torch
 from lightning.pytorch.core import LightningModule
+from torch import Tensor, optim
 
 from .decoder import LBAEDecoder
 from .encoder import LBAEEncoder

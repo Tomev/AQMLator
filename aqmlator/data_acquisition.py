@@ -35,10 +35,10 @@ __author__ = "Tomasz Rybotycki"
 
 import csv
 import locale
-from os.path import exists
 from abc import ABC, abstractmethod
-from typing import Union, Tuple, List, Any
 from dataclasses import dataclass
+from os.path import exists
+from typing import Any, List, Tuple, Union
 
 
 @dataclass(init=True, repr=True)

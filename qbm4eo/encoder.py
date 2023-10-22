@@ -8,10 +8,10 @@ Operational Programme 2014-2020, Measure 4.2 under the grant agreement no.
 POIR.04.02.00-00-D014/20-00.
 """
 
+from typing import Any, Dict, Optional, Tuple
+
 import torch
 from torch import nn
-
-from typing import Tuple, Optional, Dict, Any
 
 
 class QuantizerFunc(torch.autograd.Function):

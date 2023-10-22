@@ -31,21 +31,21 @@
 __author__ = "Tomasz Rybotycki"
 
 import unittest
-
 from typing import Sequence
-import numpy as np
-from numpy.typing import NDArray
 
-from aqmlator.tuner import ModelFinder, HyperparameterTuner, MLTaskType
-from aqmlator.qml import QNNBinaryClassifier
+import numpy as np
+import pennylane as qml
+from numpy.random import RandomState
+from numpy.typing import NDArray
 from sklearn.datasets import (
+    load_digits,
+    make_classification,
     make_moons,
     make_regression,
-    make_classification,
-    load_digits,
 )
-from numpy.random import RandomState
-import pennylane as qml
+
+from aqmlator.qml import QNNBinaryClassifier
+from aqmlator.tuner import HyperparameterTuner, MLTaskType, ModelFinder
 
 
 class TestModelFinder(unittest.TestCase):

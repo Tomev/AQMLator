@@ -29,11 +29,12 @@
 =============================================================================
 """
 
-import aqmlator.database_connection as db
-from subprocess import Popen
-import sqlite3
 import locale
 import os
+import sqlite3
+from subprocess import Popen
+
+import aqmlator.database_connection as db
 
 __author__ = "Tomasz Rybotycki"
 

@@ -33,38 +33,33 @@ __author__ = "Tomasz Rybotycki"
 
 import abc
 import uuid
+from enum import StrEnum
+from math import ceil, floor, prod, sqrt
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type
+
 import optuna
 import pennylane as qml
-
 import pennylane.numpy as np
-
 from optuna.samplers import TPESampler
-from torch.utils.data import DataLoader
-from typing import Sequence, List, Dict, Any, Type, Callable, Optional, Tuple
-from enum import StrEnum
-
-from math import ceil, floor, sqrt, prod
-
-from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
-from pennylane.templates.layers import StronglyEntanglingLayers, BasicEntanglerLayers
 from pennylane.optimize import (
-    NesterovMomentumOptimizer,
     AdamOptimizer,
     GradientDescentOptimizer,
+    NesterovMomentumOptimizer,
 )
-
-from aqmlator.qml import (
-    QuantumKernelBinaryClassifier,
-    QNNBinaryClassifier,
-    QMLModel,
-    QNNLinearRegression,
-    QNNClassifier,
-    RBMClustering,
-)
+from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
+from pennylane.templates.layers import BasicEntanglerLayers, StronglyEntanglingLayers
+from sklearn.metrics import silhouette_score  # TR: It has bounds.
+from torch.utils.data import DataLoader
 
 import aqmlator.database_connection as db
-
-from sklearn.metrics import silhouette_score  # TR: It has bounds.
+from aqmlator.qml import (
+    QMLModel,
+    QNNBinaryClassifier,
+    QNNClassifier,
+    QNNLinearRegression,
+    QuantumKernelBinaryClassifier,
+    RBMClustering,
+)
 
 # TODO TR:  Should those be global?
 

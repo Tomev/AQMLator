@@ -10,22 +10,16 @@ POIR.04.02.00-00-D014/20-00.
 import abc
 import io
 from itertools import islice
+from typing import Any, Callable, Dict, Generator, Optional, Tuple, Union
 
 import dimod
-from dimod.core.sampler import Sampler
-
-
 import numpy as np
+from dimod.core.sampler import Sampler
 from numpy.typing import NDArray
-
 from scipy.special import expit
-
-from torch.utils.data import DataLoader
 from torch import Tensor
-
+from torch.utils.data import DataLoader
 from tqdm import tqdm
-
-from typing import Generator, Tuple, Optional, Dict, Any, Union, Callable
 
 INITIAL_COEFFICIENT_SCALE: float = 0.1
 

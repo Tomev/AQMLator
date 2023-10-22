@@ -31,51 +31,43 @@
 __author__ = "Tomasz Rybotycki"
 
 import abc
-
-import torch
-from torch.utils.data import DataLoader
-from torch import Tensor
-
-from lightning.pytorch.trainer import Trainer
-
-from dimod.core.sampler import Sampler
-from numpy.typing import NDArray
-
 import random
-
-import pennylane as qml
-
-from math import prod
 from itertools import chain
+from math import prod
 from typing import (
-    Sequence,
-    Callable,
-    Optional,
-    Dict,
     Any,
-    Tuple,
-    List,
-    Type,
-    Union,
-    TypeVar,
+    Callable,
+    Dict,
     Generator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
 )
 
-from sklearn.svm import SVC
+import pennylane as qml
+import torch
+from dimod.core.sampler import Sampler
+from lightning.pytorch.trainer import Trainer
+from numpy.typing import NDArray
+from pennylane import numpy as np
+from pennylane.kernels import target_alignment
+from pennylane.optimize import GradientDescentOptimizer, NesterovMomentumOptimizer
+from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
+from pennylane.templates.layers import StronglyEntanglingLayers
+from pennylane.transforms import transpile
 from sklearn.base import ClassifierMixin, RegressorMixin
 from sklearn.model_selection import train_test_split
-
-from pennylane import numpy as np
-from pennylane.templates.layers import StronglyEntanglingLayers
-from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
-from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
-from pennylane.kernels import target_alignment
-from pennylane.transforms import transpile
+from sklearn.svm import SVC
+from torch import Tensor
+from torch.utils.data import DataLoader
 
 from qbm4eo.encoder import LBAEEncoder
 from qbm4eo.lbae import LBAE
-from qbm4eo.rbm import RBM, RBMTrainer, CD1Trainer, AnnealingRBMTrainer
-
+from qbm4eo.rbm import RBM, AnnealingRBMTrainer, CD1Trainer, RBMTrainer
 
 ModelOutput = TypeVar("ModelOutput", float, int)
 

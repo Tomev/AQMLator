@@ -29,14 +29,15 @@
 """
 __author__ = "Tomasz Rybotycki"
 
-from math import isclose
 import unittest
-from typing import List, Tuple, Union, Sequence
+from math import isclose
+from typing import List, Sequence, Tuple, Union
+
 from aqmlator.data_acquisition import LearningDatum, SupervisedLearningDatum
 from aqmlator.data_preprocessing import (
-    get_targets,
-    get_attributes,
     LearningDatumMinMaxScaler,
+    get_attributes,
+    get_targets,
 )
 
 

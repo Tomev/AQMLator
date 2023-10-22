@@ -31,48 +31,42 @@
 __author__ = "Tomasz Rybotycki"
 
 
-import unittest
 import abc
 import os
+import unittest
+from typing import List, Optional, Sequence, Tuple, Type, Union
 
 import dill
 import lightning.pytorch.utilities.seed
-
 import pennylane as qml
-from pennylane.operation import Operation
-from pennylane.templates import StronglyEntanglingLayers
-from pennylane.measurements import ExpectationMP
-from pennylane import numpy as np
-
 import torch
-from torch import Tensor
-from torch.utils.data import DataLoader
-
-from typing import Sequence, List, Type, Optional, Union, Tuple
-
-from sklearn.datasets import (
-    make_moons,
-    make_regression,
-    make_classification,
-    load_digits,
-)
-from sklearn.metrics import rand_score
-
+from dwave.samplers import RandomSampler
 from numpy import isclose
 from numpy.random import RandomState
 from numpy.typing import NDArray
+from pennylane import numpy as np
+from pennylane.measurements import ExpectationMP
+from pennylane.operation import Operation
+from pennylane.templates import StronglyEntanglingLayers
+from qiskit import IBMQ
+from sklearn.datasets import (
+    load_digits,
+    make_classification,
+    make_moons,
+    make_regression,
+)
+from sklearn.metrics import rand_score
+from torch import Tensor
+from torch.utils.data import DataLoader
+
 from aqmlator.qml import (
-    QNNModel,
     QNNBinaryClassifier,
-    QuantumKernelBinaryClassifier,
-    QNNLinearRegression,
     QNNClassifier,
+    QNNLinearRegression,
+    QNNModel,
+    QuantumKernelBinaryClassifier,
     RBMClustering,
 )
-
-from qiskit import IBMQ
-
-from dwave.samplers import RandomSampler
 
 
 class TestQNNModel(unittest.TestCase, abc.ABC):
