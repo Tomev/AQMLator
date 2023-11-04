@@ -13,11 +13,13 @@ optuna-dashboard
 pennylane-qiskit
 
 numpy~=1.23.5
-qiskit~=0.43.0
+qiskit
+qiskit-ibmq-provider
 setuptools==67.8.0
-lightning~=1.9.5
+lightning
 
 scipy
 dimod
 tqdm
 dwave-system
+

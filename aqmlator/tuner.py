@@ -412,7 +412,7 @@ class ModelFinder(OptunaOptimizer):
         )
 
         data: Sequence[Tuple[Tensor, Tensor]] = [
-            (Tensor(val), Tensor(-1)) for val in self._x
+            (Tensor(val), Tensor([-1])) for val in self._x
         ]
 
         # Type ignore the following line, because Torch isn't type-hinted well enough.

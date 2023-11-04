@@ -12,6 +12,7 @@ from typing import Any, Dict, Tuple
 
 import torch
 from lightning.pytorch.core import LightningModule
+from lightning.pytorch.utilities.types import OptimizerLRScheduler
 from torch import Tensor, optim
 
 from .decoder import LBAEDecoder
@@ -142,6 +143,9 @@ class LBAE(LightningModule):
         :return:
             The output of the model, the input images, and the labels.
         """
+        del batch_idx
+        del dataloader_idx
+
         x: Tensor
         labels: Tensor
 
@@ -155,7 +159,7 @@ class LBAE(LightningModule):
         xr = self.forward(x)
         return loss(xr.view(x.size()), x)
 
-    def configure_optimizers(self) -> Dict[str, optim.Optimizer]:
+    def configure_optimizers(self) -> OptimizerLRScheduler:
         """
         A function for configuring the optimizers for the LBAE model.
 

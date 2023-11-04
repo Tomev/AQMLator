@@ -909,7 +909,7 @@ class TestRBMClustering(unittest.TestCase):
         """
         lightning.pytorch.seed_everything(0, workers=True)  # Fix the seed.
 
-        lbae_input_size: Tuple[int, ...] = (1, 8, 8)
+        lbae_input_size: Tuple[int, ...] = (1, 1, 8, 8)
         lbae_out_channels: int = 8
         n_layers: int = 2
         rbm_n_visible_neurons: int = 16
@@ -983,7 +983,7 @@ class TestRBMClustering(unittest.TestCase):
         self.rbm_clustering.sampler = sampler
         self._test_fit_run()
 
-    def test_sampler_predict(self) -> None:
+    def test_rbm_predict(self) -> None:
         """
         Tests if the RBMClustering predict method runs and returns binary values.
         """
@@ -992,7 +992,7 @@ class TestRBMClustering(unittest.TestCase):
         for val in prediction:
             self.assertTrue(val in (0, 1))
 
-    def test_sampler_accuracy_increase(self) -> None:
+    def test_clustering_accuracy_increase(self) -> None:
         """
         Tests if the accuracy of the clustering increases after the (classical)
         training (which it should).

@@ -1408,8 +1408,13 @@ class RBMClustering:
         self,
         data_loader: DataLoader[Tuple[Tensor, Tensor]],
     ) -> None:
+        n_gpus: int = self.n_gpus if self.n_gpus > 0 else 1
+
         lbae_trainer: Trainer = Trainer(
-            gpus=self.n_gpus, max_epochs=self.n_epochs, deterministic=True
+            accelerator="cpu",  # TR TODO: Make it modifiable.
+            num_nodes=n_gpus,
+            max_epochs=self.n_epochs,
+            deterministic=True,
         )
 
         print("LBAE training start.")
