@@ -4,12 +4,10 @@ Tests for the rbm.py module.
 import io
 
 import dimod
-
 import numpy as np
 import torch
 
-
-from qbm4eo.rbm import qubo_from_rbm_coefficients, RBM
+from qbm4eo.rbm import RBM, qubo_from_rbm_coefficients
 
 
 class TestRBMToQUBOConversion:

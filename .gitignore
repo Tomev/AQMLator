@@ -8,3 +8,6 @@ aqmlator/database_connection.py
 aqmlator/ibmq_connection.py
 *sql
 *db
+*_build*
+docs/
+*\lightning_logs

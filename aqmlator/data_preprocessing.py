@@ -32,10 +32,12 @@
 __author__ = "Tomasz Rybotycki"
 
 
-from typing import Tuple, List, Union, Sequence, TypeVar
-from sklearn.preprocessing import MinMaxScaler
-from aqmlator.data_acquisition import LearningDatum, SupervisedLearningDatum
 from copy import deepcopy
+from typing import List, Sequence, Tuple, TypeVar, Union
+
+from sklearn.preprocessing import MinMaxScaler
+
+from aqmlator.data_acquisition import LearningDatum, SupervisedLearningDatum
 
 AqmlatorDatum = TypeVar("AqmlatorDatum", LearningDatum, SupervisedLearningDatum)
 

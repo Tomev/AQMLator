@@ -31,48 +31,42 @@
 __author__ = "Tomasz Rybotycki"
 
 
-import unittest
 import abc
 import os
+import unittest
+from typing import List, Optional, Sequence, Tuple, Type, Union
 
 import dill
 import lightning.pytorch.utilities.seed
-
 import pennylane as qml
-from pennylane.operation import Operation
-from pennylane.templates import StronglyEntanglingLayers
-from pennylane.measurements import ExpectationMP
-from pennylane import numpy as np
-
 import torch
-from torch import Tensor
-from torch.utils.data import DataLoader
-
-from typing import Sequence, List, Type, Optional, Union, Tuple
-
-from sklearn.datasets import (
-    make_moons,
-    make_regression,
-    make_classification,
-    load_digits,
-)
-from sklearn.metrics import rand_score
-
+from dwave.samplers import RandomSampler
 from numpy import isclose
 from numpy.random import RandomState
 from numpy.typing import NDArray
+from pennylane import numpy as np
+from pennylane.measurements import ExpectationMP
+from pennylane.operation import Operation
+from pennylane.templates import StronglyEntanglingLayers
+from qiskit import IBMQ
+from sklearn.datasets import (
+    load_digits,
+    make_classification,
+    make_moons,
+    make_regression,
+)
+from sklearn.metrics import rand_score
+from torch import Tensor
+from torch.utils.data import DataLoader
+
 from aqmlator.qml import (
-    QNNModel,
     QNNBinaryClassifier,
-    QuantumKernelBinaryClassifier,
-    QNNLinearRegression,
     QNNClassifier,
+    QNNLinearRegression,
+    QNNModel,
+    QuantumKernelBinaryClassifier,
     RBMClustering,
 )
-
-from qiskit import IBMQ
-
-from dwave.samplers import RandomSampler
 
 
 class TestQNNModel(unittest.TestCase, abc.ABC):
@@ -915,7 +909,7 @@ class TestRBMClustering(unittest.TestCase):
         """
         lightning.pytorch.seed_everything(0, workers=True)  # Fix the seed.
 
-        lbae_input_size: Tuple[int, ...] = (1, 8, 8)
+        lbae_input_size: Tuple[int, ...] = (1, 1, 8, 8)
         lbae_out_channels: int = 8
         n_layers: int = 2
         rbm_n_visible_neurons: int = 16
@@ -989,7 +983,7 @@ class TestRBMClustering(unittest.TestCase):
         self.rbm_clustering.sampler = sampler
         self._test_fit_run()
 
-    def test_sampler_predict(self) -> None:
+    def test_rbm_predict(self) -> None:
         """
         Tests if the RBMClustering predict method runs and returns binary values.
         """
@@ -998,7 +992,7 @@ class TestRBMClustering(unittest.TestCase):
         for val in prediction:
             self.assertTrue(val in (0, 1))
 
-    def test_sampler_accuracy_increase(self) -> None:
+    def test_clustering_accuracy_increase(self) -> None:
         """
         Tests if the accuracy of the clustering increases after the (classical)
         training (which it should).

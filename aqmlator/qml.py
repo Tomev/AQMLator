@@ -31,51 +31,43 @@
 __author__ = "Tomasz Rybotycki"
 
 import abc
-
-import torch
-from torch.utils.data import DataLoader
-from torch import Tensor
-
-from lightning.pytorch.trainer import Trainer
-
-from dimod.core.sampler import Sampler
-from numpy.typing import NDArray
-
 import random
-
-import pennylane as qml
-
-from math import prod
 from itertools import chain
+from math import prod
 from typing import (
-    Sequence,
-    Callable,
-    Optional,
-    Dict,
     Any,
-    Tuple,
-    List,
-    Type,
-    Union,
-    TypeVar,
+    Callable,
+    Dict,
     Generator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
 )
 
-from sklearn.svm import SVC
+import pennylane as qml
+import torch
+from dimod.core.sampler import Sampler
+from lightning.pytorch.trainer import Trainer
+from numpy.typing import NDArray
+from pennylane import numpy as np
+from pennylane.kernels import target_alignment
+from pennylane.optimize import GradientDescentOptimizer, NesterovMomentumOptimizer
+from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
+from pennylane.templates.layers import StronglyEntanglingLayers
+from pennylane.transforms import transpile
 from sklearn.base import ClassifierMixin, RegressorMixin
 from sklearn.model_selection import train_test_split
-
-from pennylane import numpy as np
-from pennylane.templates.layers import StronglyEntanglingLayers
-from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
-from pennylane.optimize import NesterovMomentumOptimizer, GradientDescentOptimizer
-from pennylane.kernels import target_alignment
-from pennylane.transforms import transpile
+from sklearn.svm import SVC
+from torch import Tensor
+from torch.utils.data import DataLoader
 
 from qbm4eo.encoder import LBAEEncoder
 from qbm4eo.lbae import LBAE
-from qbm4eo.rbm import RBM, RBMTrainer, CD1Trainer, AnnealingRBMTrainer
-
+from qbm4eo.rbm import RBM, AnnealingRBMTrainer, CD1Trainer, RBMTrainer
 
 ModelOutput = TypeVar("ModelOutput", float, int)
 
@@ -196,8 +188,8 @@ class QMLModel(abc.ABC):
     @abc.abstractmethod
     def fit(
         self,
-        X: Sequence[Sequence[float]],
-        y: Sequence[ModelOutput],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Optional[Sequence[ModelOutput]],
     ) -> "QMLModel":
         """
         The model training method.
@@ -229,7 +221,9 @@ class QMLModel(abc.ABC):
         self._layers = [StronglyEntanglingLayers] * 2
 
     def _split_data_for_training(
-        self, X: Sequence[Sequence[float]], y: Sequence[ModelOutput]
+        self,
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Sequence[ModelOutput],
     ) -> None:
         """
         Splits the objects into validation and training sets. Should be called before
@@ -493,8 +487,8 @@ class QNNModel(QMLModel, abc.ABC):
 
     def fit(
         self,
-        X: Sequence[Sequence[float]],
-        y: Sequence[ModelOutput],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Optional[Sequence[ModelOutput]],
     ) -> "QNNModel":
         """
         The model training method.
@@ -512,6 +506,9 @@ class QNNModel(QMLModel, abc.ABC):
 
         if not self.dev:
             raise AttributeError("Specify the device (dev) before fitting.")
+
+        if y is None:
+            raise AttributeError("Missing y in supervised learning model.")
 
         self.circuit = self._create_circuit()
 
@@ -713,7 +710,7 @@ class QNNLinearRegression(RegressorMixin, QNNModel):
     def _cost(
         self,
         weights: Sequence[float],
-        X: Sequence[Sequence[float]],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
         y: Sequence[int],
     ) -> float:
         """
@@ -1030,8 +1027,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
     def fit(
         self,
-        X: Sequence[Sequence[float]],
-        y: Sequence[ModelOutput],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Optional[Sequence[ModelOutput]],
     ) -> "QuantumKernelBinaryClassifier":
         """
         The classifier training method.
@@ -1050,6 +1047,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         if not self.dev:
             raise AttributeError("Specify the device (dev) before fitting.")
+
+        if y is None:
+            raise AttributeError("Missing y in supervised learning model.")
 
         kernel: Callable[
             [Sequence[float], Sequence[float], Sequence[float]], float
@@ -1278,8 +1278,8 @@ class QNNClassifier(QMLModel, ClassifierMixin):
 
     def fit(
         self,
-        X: Sequence[Sequence[float]],
-        y: Sequence[ModelOutput],
+        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        y: Optional[Sequence[ModelOutput]],
     ) -> "QNNClassifier":
         """
         The model training method. Essentially, it fits every binary classifier to the
@@ -1296,6 +1296,9 @@ class QNNClassifier(QMLModel, ClassifierMixin):
 
         if not self.dev:
             raise AttributeError("Specify the device (dev) before fitting.")
+
+        if y is None:
+            raise AttributeError("Missing y in supervised learning model.")
 
         # Check if there's a binary classifier for each class.
         unique_classes: np.ndarray = np.unique(y)
@@ -1405,8 +1408,13 @@ class RBMClustering:
         self,
         data_loader: DataLoader[Tuple[Tensor, Tensor]],
     ) -> None:
+        n_gpus: int = self.n_gpus if self.n_gpus > 0 else 1
+
         lbae_trainer: Trainer = Trainer(
-            gpus=self.n_gpus, max_epochs=self.n_epochs, deterministic=True
+            accelerator="cpu",  # TR TODO: Make it modifiable.
+            num_nodes=n_gpus,
+            max_epochs=self.n_epochs,
+            deterministic=True,
         )
 
         print("LBAE training start.")

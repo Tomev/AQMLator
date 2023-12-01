@@ -9,11 +9,10 @@ POIR.04.02.00-00-D014/20-00.
 """
 
 from math import prod
+from typing import Any, Dict, List, Optional, Sequence
 
 import torch
 from torch import nn
-
-from typing import Dict, Optional, Any, List, Sequence
 
 
 class ResBlockDeConvPart(nn.Module):

@@ -30,17 +30,16 @@
 
 __author__ = "Tomasz Rybotycki"
 
-import unittest
 import csv
-import os
 import locale
-
-from typing import Tuple, Union, List
+import os
+import unittest
+from typing import List, Tuple, Union
 
 from aqmlator.data_acquisition import (
-    SupervisedLearningDatum,
-    LearningDatum,
     CSVDataReceiver,
+    LearningDatum,
+    SupervisedLearningDatum,
 )
 
 

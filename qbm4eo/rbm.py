@@ -10,22 +10,16 @@ POIR.04.02.00-00-D014/20-00.
 import abc
 import io
 from itertools import islice
+from typing import Any, Callable, Dict, Generator, Optional, Tuple, Union
 
 import dimod
-from dimod.core.sampler import Sampler
-
-
 import numpy as np
+from dimod.core.sampler import Sampler
 from numpy.typing import NDArray
-
 from scipy.special import expit
-
-from torch.utils.data import DataLoader
 from torch import Tensor
-
+from torch.utils.data import DataLoader
 from tqdm import tqdm
-
-from typing import Generator, Tuple, Optional, Dict, Any, Union, Callable
 
 INITIAL_COEFFICIENT_SCALE: float = 0.1
 
@@ -377,8 +371,16 @@ class AnnealingRBMTrainer(RBMTrainer):
             self.learning_rate * (batch.T @ hidden - sample_v.T @ sample_h) / len(batch)
         )
         # And biases
-        rbm.v_bias += self.learning_rate * (batch - sample_v).sum(axis=0)
-        rbm.h_bias += self.learning_rate * (hidden - sample_h).sum(axis=0)
+        a = np.asarray(batch - sample_v).sum(axis=0)
+
+        print(type(a))
+
+        rbm.v_bias += (
+            self.learning_rate * np.asarray(batch - sample_v).sum(axis=0).squeeze()
+        )
+        rbm.h_bias += (
+            self.learning_rate * np.asarray(hidden - sample_h).sum(axis=0).squeeze()
+        )
 
 
 class CD1Trainer(RBMTrainer):
