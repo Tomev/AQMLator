@@ -32,30 +32,19 @@
 __author__ = "Tomasz Rybotycki"
 
 import abc
+import json
 import uuid
 from enum import StrEnum
 from math import ceil, floor, prod, sqrt
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import optuna
-import requests
-import json
-
 import pennylane as qml
-
 import pennylane.numpy as np
+import requests  # type: ignore[import-untyped]
 from numpy.typing import NDArray
 from optuna.samplers import TPESampler
-from torch.utils.data import DataLoader
-from typing import Sequence, List, Dict, Any, Type, Callable, Optional, Tuple
-from enum import StrEnum
-
-from math import ceil, floor, sqrt, prod
-
-from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
-from pennylane.templates.layers import StronglyEntanglingLayers, BasicEntanglerLayers
 from pennylane.optimize import (
-    NesterovMomentumOptimizer,
     AdamOptimizer,
     GradientDescentOptimizer,
     NesterovMomentumOptimizer,
@@ -75,11 +64,7 @@ from aqmlator.qml import (
     QuantumKernelBinaryClassifier,
     RBMClustering,
 )
-
-import aqmlator.database_connection as db
 from aqmlator.server import status_update_endpoint
-
-from sklearn.metrics import silhouette_score  # TR: It has bounds.
 
 # TODO TR:  Should those be global?
 
@@ -208,7 +193,7 @@ class OptunaOptimizer(abc.ABC):
         :param n_seeds:
             Number of seeds checked per `optuna` trial.
         """
-        self._x: Sequence[Sequence[float]] = features
+        self._x: Union[Sequence[Sequence[float]], NDArray[np.float32]] = features
         self._y: Optional[Sequence[int]] = classes
 
         self._study_name: str = study_name
@@ -320,7 +305,9 @@ class ModelFinder(OptunaOptimizer):
         self.d_wave_access: bool = d_wave_access
 
         requests.post(
-            status_update_endpoint, data=json.dumps({self.study_name: "Waiting..."})
+            status_update_endpoint,
+            data=json.dumps({self._study_name: "Waiting..."}),
+            timeout=1,
         )
 
     def find_model(self) -> None:
@@ -328,7 +315,9 @@ class ModelFinder(OptunaOptimizer):
         Finds the QNN model that best fits the given data.
         """
         requests.post(
-            status_update_endpoint, data=json.dumps({self.study_name: "Tuning..."})
+            status_update_endpoint,
+            data=json.dumps({self._study_name: "Tuning..."}),
+            timeout=1,
         )
         sampler: TPESampler = TPESampler(
             seed=0, multivariate=True, group=True  # For experiments repeatability.
@@ -347,7 +336,9 @@ class ModelFinder(OptunaOptimizer):
             n_jobs=self._n_cores,
         )
         requests.post(
-            status_update_endpoint, data=json.dumps({self.study_name: "Done."})
+            status_update_endpoint,
+            data=json.dumps({self._study_name: "Done."}),
+            timeout=1,
         )
 
     def _simple_model_objective_function(self, trial: optuna.trial.Trial) -> float:
@@ -686,7 +677,9 @@ class ModelFinder(OptunaOptimizer):
 
     def __del__(self) -> None:
         requests.post(
-            status_update_endpoint, data=json.dumps({self.study_name: "Delete"})
+            status_update_endpoint,
+            data=json.dumps({self._study_name: "Delete"}),
+            timeout=1,
         )
 
 

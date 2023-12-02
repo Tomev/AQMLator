@@ -1,5 +1,5 @@
 # Tests
-# TODO TR: Check versions
+tox
 black
 flake8
 mypy

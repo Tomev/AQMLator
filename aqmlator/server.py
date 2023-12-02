@@ -30,10 +30,10 @@
 
 __author__ = "Tomasz Rybotycki"
 
-import uvicorn
-from fastapi import FastAPI, Response
 from typing import Dict
 
+import uvicorn
+from fastapi import FastAPI, Response
 
 app: FastAPI = FastAPI()
 
@@ -51,8 +51,8 @@ def status() -> Response:
     if not status_data:
         content += "No running tuners!"
     else:
-        for key in status_data:
-            content += f"Tuner {key}: {status_data[key]}\n"
+        for status_id, tuning_status in status_data.items():
+            content += f"Tuner {status_id}: {tuning_status}\n"
 
     return Response(status_code=200, content=content)
 
