@@ -1,16 +1,16 @@
 requests
-scikit-learn~=1.2.2
-dill~=0.3.6
+scikit-learn
+dill
 pennylane
 torch
 torchvision
 torchaudio
 matplotlib
-optuna==3.2.0
+optuna
 psycopg2
 optuna-dashboard
 pennylane-qiskit
-numpy~=1.23.5
+numpy
 qiskit
 qiskit-ibmq-provider
 setuptools
@@ -19,4 +19,5 @@ scipy
 dimod
 tqdm
 dwave-system
-
+fastapi
+uvicorn
