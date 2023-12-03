@@ -304,21 +304,28 @@ class ModelFinder(OptunaOptimizer):
 
         self.d_wave_access: bool = d_wave_access
 
-        requests.post(
-            status_update_endpoint,
-            data=json.dumps({self._study_name: "Waiting..."}),
-            timeout=1,
-        )
+        try:
+            requests.post(
+                status_update_endpoint,
+                data=json.dumps({self._study_name: "Waiting..."}),
+                timeout=1,
+            )
+        except requests.exceptions.ConnectionError as e:
+            print(e)
 
     def find_model(self) -> None:
         """
         Finds the QNN model that best fits the given data.
         """
-        requests.post(
-            status_update_endpoint,
-            data=json.dumps({self._study_name: "Tuning..."}),
-            timeout=1,
-        )
+        try:
+            requests.post(
+                status_update_endpoint,
+                data=json.dumps({self._study_name: "Tuning..."}),
+                timeout=1,
+            )
+        except requests.exceptions.ConnectionError as e:
+            print(e)
+
         sampler: TPESampler = TPESampler(
             seed=0, multivariate=True, group=True  # For experiments repeatability.
         )
@@ -335,11 +342,15 @@ class ModelFinder(OptunaOptimizer):
             n_trials=self._n_trials,
             n_jobs=self._n_cores,
         )
-        requests.post(
-            status_update_endpoint,
-            data=json.dumps({self._study_name: "Done."}),
-            timeout=1,
-        )
+
+        try:
+            requests.post(
+                status_update_endpoint,
+                data=json.dumps({self._study_name: "Done."}),
+                timeout=1,
+            )
+        except requests.exceptions.ConnectionError as e:
+            print(e)
 
     def _simple_model_objective_function(self, trial: optuna.trial.Trial) -> float:
         """
@@ -676,11 +687,14 @@ class ModelFinder(OptunaOptimizer):
         kwargs.pop("n_layers")
 
     def __del__(self) -> None:
-        requests.post(
-            status_update_endpoint,
-            data=json.dumps({self._study_name: "Delete"}),
-            timeout=1,
-        )
+        try:
+            requests.post(
+                status_update_endpoint,
+                data=json.dumps({self._study_name: "Delete"}),
+                timeout=1,
+            )
+        except requests.exceptions.ConnectionError as e:
+            print(e)
 
 
 class HyperparameterTuner(OptunaOptimizer):

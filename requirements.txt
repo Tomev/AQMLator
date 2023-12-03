@@ -12,6 +12,7 @@ optuna-dashboard
 pennylane-qiskit
 numpy
 qiskit
+qiskit-ibmq-provider
 setuptools
 lightning
 scipy

@@ -390,9 +390,10 @@ class QNNModel(QMLModel, abc.ABC):
             if isinstance(inputs, torch.Tensor):
                 inputs = self._prepare_torch_inputs(inputs)
 
-            for op in self._embedding_method(
-                inputs, do_queue=False, **self._embedding_kwargs
-            ).expand():
+            with qml.QueuingManager.stop_recording():
+                ops = self._embedding_method(inputs, **self._embedding_kwargs).expand()
+
+            for op in ops:
                 qml.apply(op)
 
             start_weights: int = 0
@@ -410,9 +411,10 @@ class QNNModel(QMLModel, abc.ABC):
 
                 layer_weights = layer_weights.reshape(layer_shape)
 
-                for op in layer(
-                    layer_weights, do_queue=False, wires=self.wires
-                ).expand():
+                with qml.QueuingManager.stop_recording():
+                    ops = layer(layer_weights, wires=self.wires).expand()
+
+                for op in ops:
                     qml.apply(op)
 
             return [qml.expval(qml.PauliZ((i))) for i in self.wires]
@@ -877,9 +879,12 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         start_weights: int = 0
 
         for layer in self._layers:
-            for op in self._embedding_method(
-                features, do_queue=False, **self._embedding_kwargs
-            ).expand():
+            with qml.QueuingManager.stop_recording():
+                ops = self._embedding_method(
+                    features, **self._embedding_kwargs
+                ).expand()
+
+            for op in ops:
                 qml.apply(op)
 
             layer_shape: Tuple[int, ...] = layer.shape(
@@ -890,7 +895,10 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             start_weights += prod(layer_shape)
             layer_weights = np.array(layer_weights).reshape(layer_shape)
 
-            for op in layer(layer_weights, do_queue=False, wires=self.wires).expand():
+            with qml.QueuingManager.stop_recording():
+                ops = layer(layer_weights, wires=self.wires).expand()
+
+            for op in ops:
                 qml.apply(op)
 
     def _create_transform(
