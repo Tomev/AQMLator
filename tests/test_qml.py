@@ -946,7 +946,7 @@ class TestRBMClustering(unittest.TestCase):
             lbae_input_shape=lbae_input_size,
             lbae_out_channels=lbae_out_channels,
             lbae_n_layers=n_layers,
-            rmb_n_visible_neurons=rbm_n_visible_neurons,
+            rbm_n_visible_neurons=rbm_n_visible_neurons,
             rbm_n_hidden_neurons=rbm_n_hidden_neurons,
             n_epochs=n_epochs,
             rng=np.random.default_rng(seed=42),

@@ -1381,7 +1381,7 @@ class RBMClustering:
         lbae_input_shape: Tuple[int, ...],
         lbae_out_channels: int,
         lbae_n_layers: int,
-        rmb_n_visible_neurons: int,
+        rbm_n_visible_neurons: int,
         rbm_n_hidden_neurons: int,
         n_gpus: int = 0,
         n_epochs: int = 100,
@@ -1394,13 +1394,13 @@ class RBMClustering:
         self.lbae: LBAE = LBAE(
             input_size=lbae_input_shape[1:],  # TR: Notice shape reduction.
             out_channels=lbae_out_channels,
-            latent_space_size=rmb_n_visible_neurons,
+            latent_space_size=rbm_n_visible_neurons,
             num_layers=lbae_n_layers,
             quantize=True,  # Required, because it will be the input of the RBM.
         )
 
         self.rbm: RBM = RBM(
-            num_visible=rmb_n_visible_neurons, num_hidden=rbm_n_hidden_neurons, rng=rng
+            num_visible=rbm_n_visible_neurons, num_hidden=rbm_n_hidden_neurons, rng=rng
         )
 
         self.n_gpus: int = n_gpus

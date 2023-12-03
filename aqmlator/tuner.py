@@ -606,7 +606,7 @@ class ModelFinder(OptunaOptimizer):
             ),
         }
 
-        kwargs["rmb_n_visible_neurons"] = kwargs["lbae_out_channels"]
+        kwargs["rbm_n_visible_neurons"] = kwargs["lbae_out_channels"]
 
         kwargs["rbm_n_hidden_neurons"] = trial.suggest_int(
             name="rbm_n_hidden_neurons",
