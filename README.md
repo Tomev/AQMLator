@@ -7,9 +7,23 @@ A package for auto (quantum machine learning)-izing your experiments!
 Python version 3.11 is required. Necessary packages are provided in the respective
 requirements*.txt files.
 
+### Database
+
 The Postgres database is used to store the Optuna trials data. It has to be 
 installed prior to running the package, so that the `psycopg2` package can be
 installed properly.
+
+### Documentation
+
+The documentation is built using Sphinx. Building PDF version of the documentation
+requires `latex` distribution (we used `miktex`) and `perl` (we used `strawberry perl`).
+To generate the pdf version of documentation, run
+
+`make latexpdf`
+
+and to generate the html version of documentation, run
+
+`make html`.
 
 ## Installation
 

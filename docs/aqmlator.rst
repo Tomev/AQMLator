@@ -50,4 +50,46 @@ aqmlator.tuner module
    :undoc-members:
    :show-inheritance:
 
+qbm4eo package
+==============
+
+Module contents
+---------------
+
+.. automodule:: qbm4eo
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qbm4eo.decoder module
+---------------------
+
+.. automodule:: qbm4eo.decoder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qbm4eo.encoder module
+---------------------
+
+.. automodule:: qbm4eo.encoder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qbm4eo.lbae module
+------------------
+
+.. automodule:: qbm4eo.lbae
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qbm4eo.rbm module
+-----------------
+
+.. automodule:: qbm4eo.rbm
+   :members:
+   :undoc-members:
+   :show-inheritance:
 

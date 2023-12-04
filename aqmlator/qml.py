@@ -199,6 +199,9 @@ class QMLModel(abc.ABC):
         :param y:
             A list of classes corresponding to the given lists of features.
 
+        :raise NotImplementedError:
+            If the method is not implemented.
+
         :return:
             Returns self after training.
         """
@@ -466,6 +469,9 @@ class QNNModel(QMLModel, abc.ABC):
         :param y:
             Outputs corresponding to the given features.
 
+        :raise NotImplementedError:
+            If the method is not implemented.
+
         :return:
             The value of the square loss function.
         """
@@ -501,6 +507,12 @@ class QNNModel(QMLModel, abc.ABC):
             The lists of features of the objects that are used during the training.
         :param y:
             A list of outputs corresponding to the given lists of features.
+
+        :raise AttributeError:
+            If the device is not specified.
+
+        :raise AttributeError:
+            If the `y` is not specified.
 
         :return:
             Returns `self` after training.
@@ -595,6 +607,9 @@ class QNNModel(QMLModel, abc.ABC):
             True labels for `X`.
         :param sample_weight:
             Sample weights.
+
+        :raise NotImplementedError:
+            If the method is not implemented.
 
         :return:
             Mean accuracy of `self.predict(X)` w.r.t. `y`.
@@ -1049,6 +1064,12 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             A list of classes corresponding to the given lists of features. The classes
             should be from set {-1, 1}.
 
+        :raise AttributeError:
+            If the device is not specified.
+
+        :raise AttributeError:
+            If the `y` is not specified.
+
         :return:
             Returns `self` after training.
         """
@@ -1297,6 +1318,13 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             The lists of features of the objects that are used during the training.
         :param y:
             A list of outputs corresponding to the given lists of features.
+
+        :raise AttributeError:
+            If the device is not specified.
+        :raise AttributeError:
+            If the `y` is not specified.
+        :raise AssertionError:
+            If the number of provided binary classifiers and classes don't match.
 
         :return:
             Returns `self` after training.

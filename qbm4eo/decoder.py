@@ -1,11 +1,17 @@
 """
+=============================================================================
+
 This file is a part of qbm4eo project.
 
 https://github.com/FeralQubits/qbm4eo
 
+=============================================================================
+
 It has been modified as a part of the EuroHPC PL project funded at the Smart Growth
 Operational Programme 2014-2020, Measure 4.2 under the grant agreement no.
 POIR.04.02.00-00-D014/20-00.
+
+=============================================================================
 """
 
 from math import prod
