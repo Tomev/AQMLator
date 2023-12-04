@@ -4,3 +4,6 @@ black
 flake8
 mypy
 pylint
+# Documentation
+sphinx
+sphinx_rtd_theme

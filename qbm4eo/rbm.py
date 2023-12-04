@@ -1,7 +1,7 @@
 """
 =============================================================================
 
-This file is a part of qbm4eo project.
+This file is a part of qbm4eo.rst project.
 
 https://github.com/FeralQubits/qbm4eo
 
