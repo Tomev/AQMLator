@@ -56,7 +56,6 @@ from sklearn.metrics import silhouette_score  # TR: It has bounds.
 from torch import Tensor
 from torch.utils.data import DataLoader
 
-import aqmlator.database_connection as db
 from aqmlator.qml import (
     QMLModel,
     QNNBinaryClassifier,
