@@ -7,7 +7,7 @@
 
 =============================================================================
 
-    Copyright 2022 ACK Cyfronet AGH. All Rights Reserved.
+    Copyright 2023 ACK Cyfronet AGH. All Rights Reserved.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -113,10 +113,15 @@ class CSVDataReceiver(DataReceiverInterface):
 
     def receive_data(self, data_file_path: str) -> List[LearningDatum]:
         """
-        The main method of the data receiver. It takes the
+        The main method of the data receiver. It takes the path to the file containing
+        the data and returns a list of LearningDatum objects representing the data in
+        the CSV file.
 
         :param data_file_path:
             The path to the file containing the data.
+
+        :raises FileNotFoundError:
+            If the file does not exist.
 
         :return:
             A list of LearningDatum objects representing the data in the CSV file.

@@ -9,5 +9,5 @@ aqmlator/ibmq_connection.py
 *sql
 *db
 *_build*
-docs/
 *\lightning_logs
+docs/build/

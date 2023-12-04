@@ -6,7 +6,7 @@
 
 =============================================================================
 
-    Copyright 2022 ACK Cyfronet AGH. All Rights Reserved.
+    Copyright 2023 ACK Cyfronet AGH. All Rights Reserved.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -34,8 +34,6 @@ import os
 import sqlite3
 from subprocess import Popen
 
-import aqmlator.database_connection as db
-
 __author__ = "Tomasz Rybotycki"
 
 
@@ -50,7 +48,7 @@ def _dump_postgres_base(dump_file_name: str = "aqmlatorDump.sql") -> None:
         "pg_dump --create --inserts -f "
         + dump_file_name
         + " -d "
-        + db.get_database_url()
+        + os.environ["aqmlator_database_url"]
     )
 
     with Popen(command, shell=True) as proc:

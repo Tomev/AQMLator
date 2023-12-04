@@ -20,10 +20,11 @@ layers in hybrid models.
 
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
    :caption: Contents:
 
-   docs/aqmlator
+   aqmlator
+   qbm4eo
 
 
 .. Indices and tables

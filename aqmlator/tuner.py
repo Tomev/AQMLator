@@ -6,7 +6,7 @@
 
 =============================================================================
 
-    Copyright 2022 ACK Cyfronet AGH. All Rights Reserved.
+    Copyright 2023 ACK Cyfronet AGH. All Rights Reserved.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import json
 import uuid
 from enum import StrEnum
 from math import ceil, floor, prod, sqrt
+from os import environ
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import optuna
@@ -55,7 +56,6 @@ from sklearn.metrics import silhouette_score  # TR: It has bounds.
 from torch import Tensor
 from torch.utils.data import DataLoader
 
-import aqmlator.database_connection as db
 from aqmlator.qml import (
     QMLModel,
     QNNBinaryClassifier,
@@ -207,7 +207,7 @@ class OptunaOptimizer(abc.ABC):
 
     @staticmethod
     def _get_storage() -> Optional[str]:
-        return db.get_database_url()
+        return environ["aqmlator_database_url"]
 
 
 class ModelFinder(OptunaOptimizer):
@@ -606,7 +606,7 @@ class ModelFinder(OptunaOptimizer):
             ),
         }
 
-        kwargs["rmb_n_visible_neurons"] = kwargs["lbae_out_channels"]
+        kwargs["rbm_n_visible_neurons"] = kwargs["lbae_out_channels"]
 
         kwargs["rbm_n_hidden_neurons"] = trial.suggest_int(
             name="rbm_n_hidden_neurons",

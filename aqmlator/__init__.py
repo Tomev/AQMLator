@@ -11,7 +11,7 @@
     solved using quantum mechanics (QM). A large-scale error-corrected quantum computer
     can solve computational problems that don't have a classical solution. A prime
     example of that is Shor's algorithm for integer factorization. The
-    ``holy grail'' of applied QC is the so-called quantum supremacy or quantum
+    'holy grail' of applied QC is the so-called quantum supremacy or quantum
     advantage. That is the name for a technological milestone that would mark the moment
     when quantum machines will solve a specific task faster than the most advanced
     supercomputer. Although there have already been several quantum supremacy claims in

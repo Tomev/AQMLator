@@ -48,7 +48,7 @@ from pennylane import numpy as np
 from pennylane.measurements import ExpectationMP
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
-from qiskit import IBMQ
+from qiskit_ibm_provider import IBMProvider
 from sklearn.datasets import (
     load_digits,
     make_classification,
@@ -708,9 +708,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        IBMQ.load_account()
-        provider = IBMQ.get_provider(hub="ibm-q", group="open", project="main")
-
+        provider = IBMProvider(instance="ibm-q/open/main")
         backends = provider.backends()
 
         for i in range(len(backends)):
@@ -946,7 +944,7 @@ class TestRBMClustering(unittest.TestCase):
             lbae_input_shape=lbae_input_size,
             lbae_out_channels=lbae_out_channels,
             lbae_n_layers=n_layers,
-            rmb_n_visible_neurons=rbm_n_visible_neurons,
+            rbm_n_visible_neurons=rbm_n_visible_neurons,
             rbm_n_hidden_neurons=rbm_n_hidden_neurons,
             n_epochs=n_epochs,
             rng=np.random.default_rng(seed=42),

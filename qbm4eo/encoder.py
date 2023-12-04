@@ -1,11 +1,17 @@
 """
-This file is a part of qbm4eo project.
+=============================================================================
+
+This file is a part of qbm4eo.rst project.
 
 https://github.com/FeralQubits/qbm4eo
+
+=============================================================================
 
 It has been modified as a part of the EuroHPC PL project funded at the Smart Growth
 Operational Programme 2014-2020, Measure 4.2 under the grant agreement no.
 POIR.04.02.00-00-D014/20-00.
+
+=============================================================================
 """
 
 from typing import Any, Dict, Optional, Tuple
@@ -30,6 +36,19 @@ class QuantizerFunc(torch.autograd.Function):
     # noinspection PyMethodOverriding
     @staticmethod
     def forward(ctx, f_input, dropout: int = 0):  # type: ignore
+        """
+        A method implementing the forward pass of the QuantizerFunc class.
+
+        :param ctx:
+            A context object.
+        :param f_input:
+            The input tensor.
+        :param dropout:
+            The dropout rate.
+
+        :return:
+            The quantized output tensor.
+        """
         del dropout
         x = torch.sign(f_input)
         x[x == 0] = 1
@@ -38,6 +57,17 @@ class QuantizerFunc(torch.autograd.Function):
     # noinspection PyMethodOverriding
     @staticmethod
     def backward(ctx, grad_output):  # type: ignore
+        """
+        A method implementing the backward pass of the QuantizerFunc class.
+
+        :param ctx:
+            A context object.
+        :param grad_output:
+            The gradient of the output tensor.
+
+        :return:
+            Clone of the gradient output.
+        """
         grad_input = grad_output.clone()
         return grad_input, None
 

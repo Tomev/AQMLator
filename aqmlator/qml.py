@@ -5,7 +5,7 @@
 
 =============================================================================
 
-    Copyright 2022 ACK Cyfronet AGH. All Rights Reserved.
+    Copyright 2023 ACK Cyfronet AGH. All Rights Reserved.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -198,6 +198,9 @@ class QMLModel(abc.ABC):
             The lists of features of the objects that are used during the training.
         :param y:
             A list of classes corresponding to the given lists of features.
+
+        :raise NotImplementedError:
+            If the method is not implemented.
 
         :return:
             Returns self after training.
@@ -466,6 +469,9 @@ class QNNModel(QMLModel, abc.ABC):
         :param y:
             Outputs corresponding to the given features.
 
+        :raise NotImplementedError:
+            If the method is not implemented.
+
         :return:
             The value of the square loss function.
         """
@@ -501,6 +507,12 @@ class QNNModel(QMLModel, abc.ABC):
             The lists of features of the objects that are used during the training.
         :param y:
             A list of outputs corresponding to the given lists of features.
+
+        :raise AttributeError:
+            If the device is not specified.
+
+        :raise AttributeError:
+            If the `y` is not specified.
 
         :return:
             Returns `self` after training.
@@ -595,6 +607,9 @@ class QNNModel(QMLModel, abc.ABC):
             True labels for `X`.
         :param sample_weight:
             Sample weights.
+
+        :raise NotImplementedError:
+            If the method is not implemented.
 
         :return:
             Mean accuracy of `self.predict(X)` w.r.t. `y`.
@@ -1049,6 +1064,12 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             A list of classes corresponding to the given lists of features. The classes
             should be from set {-1, 1}.
 
+        :raise AttributeError:
+            If the device is not specified.
+
+        :raise AttributeError:
+            If the `y` is not specified.
+
         :return:
             Returns `self` after training.
         """
@@ -1298,6 +1319,13 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         :param y:
             A list of outputs corresponding to the given lists of features.
 
+        :raise AttributeError:
+            If the device is not specified.
+        :raise AttributeError:
+            If the `y` is not specified.
+        :raise AssertionError:
+            If the number of provided binary classifiers and classes don't match.
+
         :return:
             Returns `self` after training.
         """
@@ -1381,7 +1409,7 @@ class RBMClustering:
         lbae_input_shape: Tuple[int, ...],
         lbae_out_channels: int,
         lbae_n_layers: int,
-        rmb_n_visible_neurons: int,
+        rbm_n_visible_neurons: int,
         rbm_n_hidden_neurons: int,
         n_gpus: int = 0,
         n_epochs: int = 100,
@@ -1394,13 +1422,13 @@ class RBMClustering:
         self.lbae: LBAE = LBAE(
             input_size=lbae_input_shape[1:],  # TR: Notice shape reduction.
             out_channels=lbae_out_channels,
-            latent_space_size=rmb_n_visible_neurons,
+            latent_space_size=rbm_n_visible_neurons,
             num_layers=lbae_n_layers,
             quantize=True,  # Required, because it will be the input of the RBM.
         )
 
         self.rbm: RBM = RBM(
-            num_visible=rmb_n_visible_neurons, num_hidden=rbm_n_hidden_neurons, rng=rng
+            num_visible=rbm_n_visible_neurons, num_hidden=rbm_n_hidden_neurons, rng=rng
         )
 
         self.n_gpus: int = n_gpus
