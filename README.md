@@ -23,7 +23,9 @@ To generate the pdf version of documentation, run
 
 and to generate the html version of documentation, run
 
-`make html`.
+`make html`
+
+Both command should be run from the `docs` directory.
 
 ## Installation
 
@@ -42,6 +44,10 @@ To develop the package, run
 To install the packages required for development, run
 
 `pip install -r requirements -r requirements-dev.txt`
+
+## Setup
+
+
 
 ## Access
 
