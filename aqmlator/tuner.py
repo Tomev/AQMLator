@@ -36,6 +36,7 @@ import json
 import uuid
 from enum import StrEnum
 from math import ceil, floor, prod, sqrt
+from os import environ
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 import optuna
@@ -207,7 +208,7 @@ class OptunaOptimizer(abc.ABC):
 
     @staticmethod
     def _get_storage() -> Optional[str]:
-        return db.get_database_url()
+        return environ["aqmlator_database_url"]
 
 
 class ModelFinder(OptunaOptimizer):

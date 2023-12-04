@@ -45,9 +45,15 @@ To install the packages required for development, run
 
 `pip install -r requirements -r requirements-dev.txt`
 
-## Setup
+### Setup
 
+To fully set up the package, one has to add the database url to the
+`aqmlator_database_url` environment variable. The example of the database url is
 
+`postgresql://user:password@localhost/mydb`
+
+where `user` is the database user, `password` is the database password, `localhost`
+is the database host, and `mydb` is the database name.
 
 ## Access
 
