@@ -11,3 +11,4 @@ aqmlator/ibmq_connection.py
 *_build*
 *\lightning_logs
 docs/build/
+dist/

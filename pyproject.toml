@@ -1,3 +1,19 @@
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "AQMLator"
+authors = [
+    {name="Tomasz Rybotycki", email="rybotycki.tomasz+aqmlator@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+
+dynamic = ["version", "description", "license", "classifiers", "dependencies"]
+
+[project.urls]
+documentation = "https://aqmlator.readthedocs.io/en/latest/index.html"
+repository = "https://git.plgrid.pl/projects/EHPCPL/repos/aqmlator/browse"
+
+
