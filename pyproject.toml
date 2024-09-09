@@ -14,6 +14,6 @@ dynamic = ["version", "description", "license", "classifiers", "dependencies"]
 
 [project.urls]
 documentation = "https://aqmlator.readthedocs.io/en/latest/index.html"
-repository = "https://git.plgrid.pl/projects/EHPCPL/repos/aqmlator/browse"
+repository = "https://github.com/Tomev/AQMLator"
 
 

@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="aqmlator",
-    version="0.1.1",
+    version="0.1.2",
     author="Tomasz Rybotycki",
     author_email="rybotycki.tomasz+aqmlator@gmail.com",
     long_description=long_description,
