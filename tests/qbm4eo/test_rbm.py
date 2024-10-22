@@ -1,6 +1,7 @@
 """
 Tests for the rbm.py module.
 """
+
 import io
 
 import dimod

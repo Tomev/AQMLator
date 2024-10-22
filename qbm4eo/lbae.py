@@ -53,7 +53,7 @@ class LBAE(LightningModule):
         num_layers: int,
         quantize: bool,
         *args: Dict[str, Any],
-        **kwargs: Dict[str, Any]
+        **kwargs: Dict[str, Any],
     ) -> None:
         """
         A default constructor for the LBAE class.

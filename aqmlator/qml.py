@@ -963,9 +963,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         """
 
         # Adjoint circuits is prepared pretty easily.
-        adjoint_ansatz: Callable[
-            [Sequence[float], Sequence[float]], None
-        ] = qml.adjoint(self._ansatz)
+        adjoint_ansatz: Callable[[Sequence[float], Sequence[float]], None] = (
+            qml.adjoint(self._ansatz)
+        )
 
         # @qml.qnode(self.dev)
         def kernel_circuit(
@@ -1038,9 +1038,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :return:
             The `kernel_matrix` function that uses the trained kernel.
         """
-        kernel: Callable[
-            [Sequence[float], Sequence[float], Sequence[float]], float
-        ] = self._create_kernel()
+        kernel: Callable[[Sequence[float], Sequence[float], Sequence[float]], float] = (
+            self._create_kernel()
+        )
 
         return qml.kernels.kernel_matrix(
             list(x),
@@ -1080,9 +1080,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         if y is None:
             raise AttributeError("Missing y in supervised learning model.")
 
-        kernel: Callable[
-            [Sequence[float], Sequence[float], Sequence[float]], float
-        ] = self._create_kernel()
+        kernel: Callable[[Sequence[float], Sequence[float], Sequence[float]], float] = (
+            self._create_kernel()
+        )
 
         self._split_data_for_training(X, y)
 
