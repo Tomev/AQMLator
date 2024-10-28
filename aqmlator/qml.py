@@ -80,6 +80,7 @@ class QMLModel(abc.ABC):
     def __init__(
         self,
         wires: Union[int, Sequence[int]],
+        *,
         device: Optional[qml.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
@@ -260,6 +261,7 @@ class QNNModel(QMLModel, abc.ABC):
         wires: Union[int, Sequence[int]],
         batch_size: int,
         n_epochs: int = 1,
+        *,
         device: Optional[qml.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
@@ -324,16 +326,16 @@ class QNNModel(QMLModel, abc.ABC):
         """
 
         super().__init__(
-            wires,
-            device,
-            optimizer,
-            embedding_method,
-            embedding_kwargs,
-            layers,
-            validation_set_size,
-            rng_seed,
-            coupling_map,
-            n_qubit,
+            wires=wires,
+            device=device,
+            optimizer=optimizer,
+            embedding_method=embedding_method,
+            embedding_kwargs=embedding_kwargs,
+            layers=layers,
+            validation_set_size=validation_set_size,
+            rng_seed=rng_seed,
+            coupling_map=coupling_map,
+            n_qubit=n_qubit,
         )
 
         self._n_epochs: int = n_epochs
@@ -784,6 +786,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
     def __init__(
         self,
         wires: Union[int, Sequence[int]],
+        *,
         n_epochs: int = 10,
         kta_subset_size: int = 5,
         device: Optional[qml.Device] = None,
@@ -839,15 +842,15 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             A description of connections between the qubits in the device.
         """
         super().__init__(
-            wires,
-            device,
-            optimizer,
-            embedding_method,
-            embedding_kwargs,
-            layers,
-            validation_set_size,
-            rng_seed,
-            coupling_map,
+            wires=wires,
+            device=device,
+            optimizer=optimizer,
+            embedding_method=embedding_method,
+            embedding_kwargs=embedding_kwargs,
+            layers=layers,
+            validation_set_size=validation_set_size,
+            rng_seed=rng_seed,
+            coupling_map=coupling_map,
         )
 
         self.n_epochs: int = n_epochs
@@ -1192,6 +1195,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         self,
         wires: Union[int, Sequence[int]],
         n_classes: int,
+        *,
         binary_classifiers: Optional[Sequence[QNNBinaryClassifier]] = None,
         batch_size: int = 10,
         accuracy_threshold: float = 0.8,
@@ -1245,14 +1249,14 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             A seed used for random weights initialization.
         """
         super().__init__(
-            wires,
-            device,
-            optimizer,
-            embedding_method,
-            embedding_kwargs,
-            layers,
-            validation_set_size,
-            rng_seed,
+            wires=wires,
+            device=device,
+            optimizer=optimizer,
+            embedding_method=embedding_method,
+            embedding_kwargs=embedding_kwargs,
+            layers=layers,
+            validation_set_size=validation_set_size,
+            rng_seed=rng_seed,
         )
 
         self.accuracy_threshold: float = accuracy_threshold
@@ -1410,6 +1414,7 @@ class RBMClustering:
         lbae_out_channels: int,
         lbae_n_layers: int,
         rbm_n_visible_neurons: int,
+        *,
         rbm_n_hidden_neurons: int,
         n_gpus: int = 0,
         n_epochs: int = 100,

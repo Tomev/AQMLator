@@ -51,8 +51,8 @@ class LBAE(LightningModule):
         out_channels: int,
         latent_space_size: int,
         num_layers: int,
-        quantize: bool,
         *args: Dict[str, Any],
+        quantize: bool,
         **kwargs: Dict[str, Any],
     ) -> None:
         """
@@ -82,11 +82,18 @@ class LBAE(LightningModule):
         )
 
         self.encoder: LBAEEncoder = LBAEEncoder(
-            input_size, out_channels, latent_space_size, num_layers, quantize
+            input_size=input_size,
+            out_channels=out_channels,
+            latent_space_size=latent_space_size,
+            num_layers=num_layers,
+            quantize=quantize,
         )
 
         self.decoder: LBAEDecoder = LBAEDecoder(
-            self.encoder.final_conv_size, input_size, latent_space_size, num_layers
+            input_size=self.encoder.final_conv_size,
+            output_size=input_size,
+            latent_space_size=latent_space_size,
+            num_layers=num_layers,
         )
 
         self.epoch: int = 0

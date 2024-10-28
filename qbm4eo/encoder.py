@@ -35,7 +35,7 @@ class QuantizerFunc(torch.autograd.Function):
 
     # noinspection PyMethodOverriding
     @staticmethod
-    def forward(ctx, f_input, dropout: int = 0):  # type: ignore
+    def forward(_ctx, f_input, dropout: int = 0):  # type: ignore
         """
         A method implementing the forward pass of the QuantizerFunc class.
 
@@ -56,7 +56,7 @@ class QuantizerFunc(torch.autograd.Function):
 
     # noinspection PyMethodOverriding
     @staticmethod
-    def backward(ctx, grad_output):  # type: ignore
+    def backward(_ctx, grad_output):  # type: ignore
         """
         A method implementing the backward pass of the QuantizerFunc class.
 
@@ -192,8 +192,8 @@ class LBAEEncoder(nn.Module):
         out_channels: int,
         latent_space_size: int,
         num_layers: int,
-        quantize: bool,
         *args: Dict[str, Any],
+        quantize: bool,
         negative_slope: float = 0.02,
         bias: bool = False,
         **kwargs: Dict[str, Any],
