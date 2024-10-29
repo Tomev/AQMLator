@@ -398,7 +398,11 @@ class QNNModel(QMLModel, abc.ABC):
                 inputs = self._prepare_torch_inputs(inputs)
 
             with qml.QueuingManager.stop_recording():
-                ops = self._embedding_method(inputs, **self._embedding_kwargs).expand()
+                ops = qml.tape.QuantumScript(
+                    self._embedding_method(
+                        inputs, **self._embedding_kwargs
+                    ).decomposition()
+                )
 
             for op in ops:
                 qml.apply(op)
@@ -419,7 +423,9 @@ class QNNModel(QMLModel, abc.ABC):
                 layer_weights = layer_weights.reshape(layer_shape)
 
                 with qml.QueuingManager.stop_recording():
-                    ops = layer(layer_weights, wires=self.wires).expand()
+                    ops = qml.tape.QuantumScript(
+                        layer(layer_weights, wires=self.wires).decomposition()
+                    )
 
                 for op in ops:
                     qml.apply(op)
@@ -900,9 +906,11 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         for layer in self._layers:
             with qml.QueuingManager.stop_recording():
-                ops = self._embedding_method(
-                    features, **self._embedding_kwargs
-                ).expand()
+                ops = qml.tape.QuantumScript(
+                    self._embedding_method(
+                        features, **self._embedding_kwargs
+                    ).decomposition()
+                )
 
             for op in ops:
                 qml.apply(op)
@@ -916,7 +924,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             layer_weights = np.array(layer_weights).reshape(layer_shape)
 
             with qml.QueuingManager.stop_recording():
-                ops = layer(layer_weights, wires=self.wires).expand()
+                ops = qml.tape.QuantumScript(
+                    layer(layer_weights, wires=self.wires).decomposition()
+                )
 
             for op in ops:
                 qml.apply(op)
