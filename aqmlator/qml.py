@@ -184,7 +184,9 @@ class QMLModel(abc.ABC):
         :return:
             Returns the number of times the quantum device was called.
         """
-        return self.dev.num_executions
+        num_executions = self.dev.tracker.latest.get("executions", 0)
+
+        return num_executions
 
     @abc.abstractmethod
     def fit(

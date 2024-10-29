@@ -484,6 +484,7 @@ class ModelFinder(OptunaOptimizer):
         The mean number of calls to the quantum machine during the fitting.
         """
         quantum_device_calls: int = 0
+        self.dev.tracker.active = True
 
         for seed in range(self._n_seeds):
             model.dev = self.dev
