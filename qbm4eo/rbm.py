@@ -281,7 +281,7 @@ class RBMTrainer:
                 total=self.num_steps,
             )
         ):
-            batch = np.matrix(batch.detach().cpu().numpy().squeeze())
+            batch = np.array(batch.detach().cpu().numpy().squeeze()).reshape(1, -1)
             self.training_step(rbm, batch)
             loss: float = (
                 (np.array(batch - rbm.reconstruct(batch)) ** 2).sum()
@@ -417,18 +417,26 @@ class CD1Trainer(RBMTrainer):
             The RBMs' visible layer neurons' states.
         """
         # Conditional probabilities given visible batch input
-        hidden_1: NDArray[np.float32] = np.matrix(rbm.h_probs_given_v(batch))
+        hidden_1: NDArray[np.float32] = np.array(rbm.h_probs_given_v(batch)).reshape(
+            1, -1
+        )
 
         # Propagate hidden -> visible -> hidden again
         visible_2: NDArray[np.float32] = rbm.v_probs_given_h(hidden_1)
-        hidden_2: NDArray[np.float32] = np.matrix(rbm.h_probs_given_v(visible_2))
+        hidden_2: NDArray[np.float32] = np.array(
+            rbm.h_probs_given_v(visible_2)
+        ).reshape(1, -1)
 
         # Update weights
+        batch_array = np.array(batch).reshape(-1, 1)
+        visible_2_array = np.array(visible_2).reshape(-1, 1)
+
         rbm.weights += np.array(
             self.learning_rate
-            * (np.matrix(batch).T @ hidden_1 - np.matrix(visible_2).T @ hidden_2)
+            * (batch_array @ hidden_1 - visible_2_array @ hidden_2)
             / len(batch)
         )
+
         # And biases
         rbm.v_bias += self.learning_rate * np.array(batch - visible_2).sum(axis=0)
         rbm.h_bias += self.learning_rate * np.array(hidden_1 - hidden_2).sum(axis=0)
