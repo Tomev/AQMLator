@@ -34,6 +34,7 @@ __author__ = "Tomasz Rybotycki"
 import abc
 import json
 import uuid
+import warnings
 from enum import StrEnum
 from math import ceil, floor, prod, sqrt
 from os import environ
@@ -45,6 +46,7 @@ import pennylane.numpy as np
 import requests  # type: ignore[import-untyped]
 from numpy.typing import NDArray
 from optuna.samplers import TPESampler
+from optuna.exceptions import ExperimentalWarning
 from pennylane.optimize import (
     AdamOptimizer,
     GradientDescentOptimizer,
@@ -328,9 +330,11 @@ class ModelFinder(OptunaOptimizer):
         except requests.exceptions.ConnectionError as e:
             print(e)
 
-        sampler: TPESampler = TPESampler(
-            seed=0, multivariate=True, group=True  # For experiments repeatability.
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ExperimentalWarning)
+            sampler: TPESampler = TPESampler(
+                seed=0, multivariate=True, group=True  # For experiments repeatability.
+            )
 
         study: optuna.study.Study = optuna.create_study(
             sampler=sampler,
@@ -758,9 +762,11 @@ class HyperparameterTuner(OptunaOptimizer):
         """
         Finds the (sub)optimal training hyperparameters.
         """
-        sampler: TPESampler = TPESampler(
-            seed=0, multivariate=True, group=True  # For experiments repeatability.
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ExperimentalWarning)
+            sampler: TPESampler = TPESampler(
+                seed=0, multivariate=True, group=True  # For experiments repeatability.
+            )
 
         study: optuna.study.Study = optuna.create_study(
             sampler=sampler,
