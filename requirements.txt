@@ -12,7 +12,7 @@ optuna-dashboard
 pennylane-qiskit
 numpy
 qiskit
-qiskit-ibmq-provider
+qiskit-ibm-runtime
 setuptools
 lightning
 scipy

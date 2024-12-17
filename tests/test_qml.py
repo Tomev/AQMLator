@@ -48,7 +48,7 @@ from pennylane import numpy as np
 from pennylane.measurements import ExpectationMP
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
-from qiskit_ibm_provider import IBMProvider
+from qiskit_ibm_runtime import QiskitRuntimeService
 from sklearn.datasets import (
     load_digits,
     make_classification,
@@ -708,8 +708,8 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        provider = IBMProvider(instance="ibm-q/open/main")
-        backends = provider.backends()
+        service = QiskitRuntimeService(instance="ibm-q/open/main")
+        backends = service.backends()
 
         for i in range(len(backends)):
             if (
