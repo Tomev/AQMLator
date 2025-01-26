@@ -1019,3 +1019,6 @@ class TestRBMClustering(unittest.TestCase):
         final_score: float = rand_score(self.y, predictions)
 
         self.assertGreater(final_score, initial_score)
+
+if __name__ == "__main__":
+    unittest.main()

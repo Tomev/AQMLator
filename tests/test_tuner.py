@@ -217,3 +217,6 @@ class TestHyperparameterTuner(unittest.TestCase):
         Tests if `HyperparameterTuner` runs.
         """
         self.tuner.find_hyperparameters()
+
+if __name__ == "__main__":
+    unittest.main()

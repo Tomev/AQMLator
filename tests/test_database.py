@@ -60,3 +60,6 @@ class TestDatabaseFunctionalities(unittest.TestCase):
         """
         export_data_to_sqlite_database(self.sqlite_db_name)
         self.assertTrue(os.path.exists(self.sqlite_db_name))
+
+if __name__ == "__main__":
+    unittest.main()
