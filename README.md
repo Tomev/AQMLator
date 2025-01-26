@@ -55,6 +55,14 @@ To fully set up the package, one has to add the database url to the
 where `user` is the database user, `password` is the database password, `localhost`
 is the database host, and `mydb` is the database name.
 
+## Tests
+
+We use `tox` to run full package tests. To do so, simply call
+```
+tox
+```
+in the project folder.
+
 ## Access
 
 To access the Optuna trials data use 
