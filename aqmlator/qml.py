@@ -81,7 +81,7 @@ class QMLModel(abc.ABC):
         self,
         wires: Union[int, Sequence[int]],
         *,
-        device: Optional[qml.Device] = None,
+        device: Optional[qml.devices.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
@@ -120,7 +120,7 @@ class QMLModel(abc.ABC):
         :param coupling_map:
             A description of connections between the qubits in the device.
         """
-        self.dev: qml.Device = device
+        self.dev: qml.devices.Device = device
 
         self.wires: Sequence[int]
 
@@ -264,7 +264,7 @@ class QNNModel(QMLModel, abc.ABC):
         batch_size: int,
         n_epochs: int = 1,
         *,
-        device: Optional[qml.Device] = None,
+        device: Optional[qml.devices.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
@@ -797,7 +797,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         *,
         n_epochs: int = 10,
         kta_subset_size: int = 5,
-        device: Optional[qml.Device] = None,
+        device: Optional[qml.devices.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
@@ -1211,7 +1211,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         binary_classifiers: Optional[Sequence[QNNBinaryClassifier]] = None,
         batch_size: int = 10,
         accuracy_threshold: float = 0.8,
-        device: Optional[qml.Device] = None,
+        device: Optional[qml.devices.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
@@ -1224,7 +1224,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
 
         :param wires:
             The wires to use in the VQC or the number of qubits (and wires) used in the
-            VQC. It will be used in the `qml.Device` specification.
+            VQC. It will be used in the `qml.devices.Device` specification.
         :param n_classes:
             The number of classes in the classification task.
         :param binary_classifiers:

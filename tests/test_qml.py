@@ -266,7 +266,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
 
         n_qubits: int = 2
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
+        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -323,7 +323,7 @@ class TestQNNLinearRegressor(TestQNNModel):
         )
 
         n_qubits: int = 2
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
+        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -384,7 +384,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.n_qubits: int = 2
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=self.n_qubits)
+        dev: qml.devices.Device = qml.device("lightning.qubit", wires=self.n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -576,7 +576,7 @@ class TestQuantumClassifier(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_features)
+        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_features)
 
         classifiers: List[QNNBinaryClassifier] = [
             QNNBinaryClassifier(
@@ -725,7 +725,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
 
         self.coupling_map: List[Sequence[int]] = config.coupling_map
 
-        self.dev: qml.Device = qml.device(
+        self.dev: qml.devices.Device = qml.device(
             "qiskit.aer",
             wires=self.n_features,
             backend="aer_simulator_statevector",
@@ -745,7 +745,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
     def _proceed_with_qek_classifier_test(
         self,
         coupling_map: Optional[List[Sequence[int]]] = None,
-        dev: Optional[qml.Device] = None,
+        dev: Optional[qml.devices.Device] = None,
     ) -> None:
         """
         A common part of all the QEK Classifier-related tests. Test is passed if the
@@ -772,7 +772,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
     def _proceed_with_qnn_regressor_test(
         self,
         coupling_map: Optional[List[Sequence[int]]] = None,
-        dev: Optional[qml.Device] = None,
+        dev: Optional[qml.devices.Device] = None,
     ) -> None:
         """
         A common part of all the QNN Regressor-related tests. Test is passed if the
@@ -800,7 +800,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
     def _proceed_wth_qnn_classifier_test(
         self,
         coupling_map: Optional[List[Sequence[int]]] = None,
-        dev: Optional[qml.Device] = None,
+        dev: Optional[qml.devices.Device] = None,
     ) -> None:
         """
         A common part of all the QNN Classifier-related tests. Test is passed if the

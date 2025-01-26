@@ -96,7 +96,7 @@ class TestModelFinder(unittest.TestCase):
         n_trials: int = 4
         n_epochs: int = 3
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
+        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         self.binary_classifier_finder: ModelFinder = ModelFinder(
             task_type=MLTaskType.BINARY_CLASSIFICATION,
@@ -200,7 +200,7 @@ class TestHyperparameterTuner(unittest.TestCase):
         n_trials: int = 2
         n_qubits: int = 2
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
+        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         classifier: QNNBinaryClassifier = QNNBinaryClassifier(2, 20, 5, device=dev)
 

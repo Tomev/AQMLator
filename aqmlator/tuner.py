@@ -229,7 +229,7 @@ class ModelFinder(OptunaOptimizer):
         features: Union[Sequence[Sequence[float]], NDArray[np.float32]],
         classes: Optional[Sequence[int]] = None,
         *,
-        device: Optional[qml.Device] = None,
+        device: Optional[qml.devices.Device] = None,
         study_name: str = "QML_Model_Finder_",
         add_uuid: bool = True,
         minimal_accuracy: float = 0.8,
@@ -303,7 +303,7 @@ class ModelFinder(OptunaOptimizer):
 
         self._optuna_postfix: str = ""
 
-        self.dev: qml.Device = device
+        self.dev: qml.devices.Device = device
         self.device_coupling_map: Optional[List[List[int]]] = coupling_map
 
         self.d_wave_access: bool = d_wave_access
