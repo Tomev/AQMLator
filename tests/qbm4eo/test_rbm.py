@@ -3,6 +3,7 @@ Tests for the rbm.py module.
 """
 
 import io
+import unittest
 
 import dimod
 import numpy as np
@@ -11,7 +12,7 @@ import torch
 from qbm4eo.rbm import RBM, qubo_from_rbm_coefficients
 
 
-class TestRBMToQUBOConversion:
+class TestRBMToQUBOConversion(unittest.TestCase):
     """
     Tests for the conversion of an RBM to a QUBO.
     """
@@ -57,7 +58,7 @@ class TestRBMToQUBOConversion:
         assert bqm == expected_bqm
 
 
-class TestRBM:
+class TestRBM(unittest.TestCase):
     """
     Tests for the RBM class.
     """
@@ -77,3 +78,7 @@ class TestRBM:
 
         assert original_rbm.num_visible == loaded_rbm.num_visible
         assert original_rbm.num_hidden == loaded_rbm.num_hidden
+
+
+if __name__ == "__main__":
+    unittest.main()
