@@ -1440,6 +1440,7 @@ class RBMClustering:
         fireing_threshold: float = 0.8,
         rng: Optional[np.random.Generator] = None,
     ) -> None:
+
         self.lbae: LBAE = LBAE(
             input_size=lbae_input_shape[1:],  # TR: Notice shape reduction.
             out_channels=lbae_out_channels,
@@ -1466,17 +1467,16 @@ class RBMClustering:
         data_loader: DataLoader[Tuple[Tensor, Tensor]],
     ) -> None:
         n_gpus: int = self.n_gpus if self.n_gpus > 0 else 1
-
+        
         lbae_trainer: Trainer = Trainer(
             accelerator="cpu",  # TR TODO: Make it modifiable.
             num_nodes=n_gpus,
             max_epochs=self.n_epochs,
             deterministic=True,
+            enable_progress_bar=False,
         )
 
-        print("LBAE training start.")
         lbae_trainer.fit(self.lbae, data_loader)
-        print("LBAE training finished.")
 
         rbm_trainer: RBMTrainer
         # Pick a trainer depending on the existence of the sampler.
@@ -1491,11 +1491,9 @@ class RBMClustering:
                 num_steps=self.n_epochs,
             )
 
-        print("RBM training start.")
         rbm_trainer.fit(
             self.rbm, self._encoded_data_loader(data_loader, self.lbae.encoder)
         )
-        print("RBM training finished.")
 
     @staticmethod
     def _encoded_data_loader(
