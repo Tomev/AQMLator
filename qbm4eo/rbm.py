@@ -17,7 +17,7 @@ POIR.04.02.00-00-D014/20-00.
 import abc
 import io
 from itertools import islice
-from typing import Any, Callable, Dict, Generator, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Generator, Optional, Tuple, Union, Iterator
 
 import dimod
 import numpy as np
@@ -35,7 +35,7 @@ def infinite_dataloader_generator(
     data_loader: Union[
         DataLoader[Tuple[Any, Any]],
         Generator[Tuple[Any, Any], Any, Any],
-    ]
+    ],
 ) -> Generator[
     Tuple[Any, Any], None, None
 ]:  # https://www.linuxjournal.com/content/pythons-mypy-callables-and-generators
@@ -264,6 +264,7 @@ class RBMTrainer:
             Generator[Tuple[Any, Any], Any, Any],
         ],
         callback: Callable[[int, RBM, float], None] = None,
+        verbose: bool = False
     ) -> None:
         """
         Fits the RBM to the data.
@@ -275,13 +276,14 @@ class RBMTrainer:
         :param callback:
             A callback function to be called after each training step.
         """
-        for i, (_, (batch, _)) in enumerate(
-            pbar := tqdm(
-                islice(infinite_dataloader_generator(data_loader), self.num_steps),
-                total=self.num_steps,
-            )
-        ):
-            batch = np.array(batch.detach().cpu().numpy().squeeze()).reshape(1, -1)
+        data_iterator: Optional[tqdm, Iterator[Tuple[Any, Any]]] = islice(infinite_dataloader_generator(data_loader), self.num_steps)
+
+        if verbose:
+            data_iterator = tqdm(data_iterator, total=self.num_steps)        
+
+        for i, (_, (batch, _)) in enumerate(data_iterator):
+            batch = np.array(batch.detach().cpu().numpy().squeeze())
+            
             self.training_step(rbm, batch)
             loss: float = (
                 (np.array(batch - rbm.reconstruct(batch)) ** 2).sum()
@@ -289,7 +291,8 @@ class RBMTrainer:
                 / batch.shape[1]
             )
 
-            pbar.set_postfix(loss=loss)
+            if verbose:
+                data_iterator.set_postfix(loss=loss)
 
             if callback is not None:
                 callback(i, rbm, loss)
@@ -380,8 +383,6 @@ class AnnealingRBMTrainer(RBMTrainer):
         # And biases
         a = np.asarray(batch - sample_v).sum(axis=0)
 
-        print(type(a))
-
         rbm.v_bias += (
             self.learning_rate * np.asarray(batch - sample_v).sum(axis=0).squeeze()
         )
@@ -417,15 +418,11 @@ class CD1Trainer(RBMTrainer):
             The RBMs' visible layer neurons' states.
         """
         # Conditional probabilities given visible batch input
-        hidden_1: NDArray[np.float32] = np.array(rbm.h_probs_given_v(batch)).reshape(
-            1, -1
-        )
+        hidden_1: NDArray[np.float32] = np.array(rbm.h_probs_given_v(batch))
 
         # Propagate hidden -> visible -> hidden again
         visible_2: NDArray[np.float32] = rbm.v_probs_given_h(hidden_1)
-        hidden_2: NDArray[np.float32] = np.array(
-            rbm.h_probs_given_v(visible_2)
-        ).reshape(1, -1)
+        hidden_2: NDArray[np.float32] = np.array(rbm.h_probs_given_v(visible_2))
 
         # Update weights
         batch_array = np.array(batch).reshape(-1, 1)
@@ -433,7 +430,7 @@ class CD1Trainer(RBMTrainer):
 
         rbm.weights += np.array(
             self.learning_rate
-            * (batch_array @ hidden_1 - visible_2_array @ hidden_2)
+            * (np.array(batch).T @ hidden_1 - np.array(visible_2).T @ hidden_2)
             / len(batch)
         )
 
