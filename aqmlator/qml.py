@@ -121,6 +121,7 @@ class QMLModel(abc.ABC):
             A description of connections between the qubits in the device.
         """
         self.dev: qml.devices.Device = device
+        self.dev.tracker.active = True
 
         self.wires: Sequence[int]
 
@@ -184,9 +185,7 @@ class QMLModel(abc.ABC):
         :return:
             Returns the number of times the quantum device was called.
         """
-        num_executions = self.dev.tracker.latest.get("executions", 0)
-
-        return num_executions
+        return self.dev.tracker.totals["executions"]
 
     @abc.abstractmethod
     def fit(
@@ -279,7 +278,7 @@ class QNNModel(QMLModel, abc.ABC):
                 Sequence[ModelOutput],
             ]
         ] = None,
-        debug_flag: bool = True,
+        debug_flag: bool = False,
         coupling_map: Optional[Sequence[Sequence[int]]] = None,
         n_qubit: Optional[int] = None,
     ) -> None:
@@ -806,7 +805,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         rng_seed: int = 42,
         accuracy_threshold: float = 0.8,
         validation_set_size: float = 0.2,
-        debug_flag: bool = True,
+        debug_flag: bool = False,
         coupling_map: Optional[Sequence[Sequence[int]]] = None,
     ) -> None:
         """
@@ -1006,10 +1005,10 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             adjoint_ansatz(weights, second_features)
             return qml.probs(wires=self.wires)
 
+        kernel_circuit = qml.QNode(kernel_circuit, device=self.dev)
+
         if self.coupling_map:
             kernel_circuit = transpile(coupling_map=self.coupling_map)(kernel_circuit)
-
-        kernel_circuit = qml.QNode(kernel_circuit, device=self.dev)
 
         def kernel(
             weights: Sequence[float],
