@@ -49,6 +49,7 @@ from pennylane.measurements import ExpectationMP
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
 from qiskit_ibm_runtime import QiskitRuntimeService
+
 from sklearn.datasets import (
     load_digits,
     make_classification,
@@ -738,13 +739,11 @@ class TestIBMQDevicesHandling(unittest.TestCase):
         self.dev: qml.devices.Device = qml.device(
             "qiskit.aer",
             wires=self.n_features,
-            backend="aer_simulator_statevector",
         )
 
         self.coupled_dev = qml.device(
             "qiskit.aer",
             wires=self.n_features,
-            backend="aer_simulator_statevector",
             coupling_map=self.coupling_map,
         )
 
