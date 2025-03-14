@@ -1467,7 +1467,7 @@ class RBMClustering:
         data_loader: DataLoader[Tuple[Tensor, Tensor]],
     ) -> None:
         n_gpus: int = self.n_gpus if self.n_gpus > 0 else 1
-        
+
         lbae_trainer: Trainer = Trainer(
             accelerator="cpu",  # TR TODO: Make it modifiable.
             num_nodes=n_gpus,

@@ -41,6 +41,7 @@ import lightning.pytorch.utilities.seed
 import pennylane as qml
 import torch
 from dwave.samplers import RandomSampler
+from lightning.pytorch.utilities import disable_possible_user_warnings
 from numpy import isclose
 from numpy.random import RandomState
 from numpy.typing import NDArray
@@ -49,7 +50,6 @@ from pennylane.measurements import ExpectationMP
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
 from qiskit_ibm_runtime import QiskitRuntimeService
-
 from sklearn.datasets import (
     load_digits,
     make_classification,
@@ -69,7 +69,6 @@ from aqmlator.qml import (
     RBMClustering,
 )
 
-from lightning.pytorch.utilities import disable_possible_user_warnings
 
 class TestQNNModel(unittest.TestCase, abc.ABC):
     """
@@ -391,7 +390,9 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.n_qubits: int = 2
 
-        self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=self.n_qubits)
+        self.dev: qml.devices.Device = qml.device(
+            "lightning.qubit", wires=self.n_qubits
+        )
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -530,7 +531,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         model_score: float = self.classifier.score(self.x, self.y)
 
-        self.classifier.dev = None 
+        self.classifier.dev = None
 
         with open("qml_test.dil", "wb") as f:
             dill.dump(self.classifier, f)
@@ -590,7 +591,10 @@ class TestQuantumClassifier(unittest.TestCase):
 
         classifiers: List[QNNBinaryClassifier] = [
             QNNBinaryClassifier(
-                wires=n_features, batch_size=batch_size, n_epochs=n_epochs, device=self.dev
+                wires=n_features,
+                batch_size=batch_size,
+                n_epochs=n_epochs,
+                device=self.dev,
             )
             for _ in range(n_classes)
         ]
@@ -915,7 +919,9 @@ class TestRBMClustering(unittest.TestCase):
         """
         Sets up the test case.
         """
-        lightning.pytorch.seed_everything(42, workers=True, verbose=False)  # Fix the seed.
+        lightning.pytorch.seed_everything(
+            42, workers=True, verbose=False
+        )  # Fix the seed.
 
         lbae_input_size: Tuple[int, ...] = (1, 1, 8, 8)
         lbae_out_channels: int = 8
@@ -949,7 +955,7 @@ class TestRBMClustering(unittest.TestCase):
             batch_size=batch_size,
             shuffle=True,
             num_workers=1,
-            persistent_workers=True
+            persistent_workers=True,
         )
 
         self.rbm_clustering: RBMClustering = RBMClustering(

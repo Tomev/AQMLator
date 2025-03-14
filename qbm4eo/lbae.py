@@ -14,13 +14,13 @@ POIR.04.02.00-00-D014/20-00.
 =============================================================================
 """
 
+import logging
 from typing import Any, Dict, Tuple
 
 import torch
 from lightning.pytorch.core import LightningModule
 from lightning.pytorch.utilities.types import OptimizerLRScheduler
 
-import logging
 # configure logging at the root level of Lightning
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 

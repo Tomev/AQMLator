@@ -45,8 +45,8 @@ import pennylane as qml
 import pennylane.numpy as np
 import requests  # type: ignore[import-untyped]
 from numpy.typing import NDArray
-from optuna.samplers import TPESampler
 from optuna.exceptions import ExperimentalWarning
+from optuna.samplers import TPESampler
 from pennylane.optimize import (
     AdamOptimizer,
     GradientDescentOptimizer,

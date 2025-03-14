@@ -17,7 +17,7 @@ POIR.04.02.00-00-D014/20-00.
 import abc
 import io
 from itertools import islice
-from typing import Any, Callable, Dict, Generator, Optional, Tuple, Union, Iterator
+from typing import Any, Callable, Dict, Generator, Iterator, Optional, Tuple, Union
 
 import dimod
 import numpy as np
@@ -264,7 +264,7 @@ class RBMTrainer:
             Generator[Tuple[Any, Any], Any, Any],
         ],
         callback: Callable[[int, RBM, float], None] = None,
-        verbose: bool = False
+        verbose: bool = False,
     ) -> None:
         """
         Fits the RBM to the data.
@@ -276,14 +276,16 @@ class RBMTrainer:
         :param callback:
             A callback function to be called after each training step.
         """
-        data_iterator: Optional[tqdm, Iterator[Tuple[Any, Any]]] = islice(infinite_dataloader_generator(data_loader), self.num_steps)
+        data_iterator: Optional[tqdm, Iterator[Tuple[Any, Any]]] = islice(
+            infinite_dataloader_generator(data_loader), self.num_steps
+        )
 
         if verbose:
-            data_iterator = tqdm(data_iterator, total=self.num_steps)        
+            data_iterator = tqdm(data_iterator, total=self.num_steps)
 
         for i, (_, (batch, _)) in enumerate(data_iterator):
             batch = np.array(batch.detach().cpu().numpy().squeeze())
-            
+
             self.training_step(rbm, batch)
             loss: float = (
                 (np.array(batch - rbm.reconstruct(batch)) ** 2).sum()

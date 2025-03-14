@@ -202,5 +202,6 @@ class TestDataPreprocessing(unittest.TestCase):
                 "Class of the fitted data has changed!",
             )
 
+
 if __name__ == "__main__":
     unittest.main()
