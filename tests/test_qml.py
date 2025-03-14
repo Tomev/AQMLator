@@ -584,11 +584,11 @@ class TestQuantumClassifier(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_features)
+        self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_features)
 
         classifiers: List[QNNBinaryClassifier] = [
             QNNBinaryClassifier(
-                wires=n_features, batch_size=batch_size, n_epochs=n_epochs, device=dev
+                wires=n_features, batch_size=batch_size, n_epochs=n_epochs, device=self.dev
             )
             for _ in range(n_classes)
         ]
@@ -597,7 +597,7 @@ class TestQuantumClassifier(unittest.TestCase):
             wires=n_features,
             binary_classifiers=classifiers,
             n_classes=n_classes,
-            device=dev,
+            device=self.dev,
         )
 
     def tearDown(self) -> None:
@@ -646,6 +646,7 @@ class TestQuantumClassifier(unittest.TestCase):
         """
 
         model_score: float = self.classifier.score(self.X, self.y)
+        self.classifier.set_dev(None)
 
         with open("qml_test.dil", "wb") as f:
             dill.dump(self.classifier, f)
@@ -653,6 +654,7 @@ class TestQuantumClassifier(unittest.TestCase):
         with open("qml_test.dil", "rb") as f:
             loaded_model: QNNModel = dill.load(f)
 
+        loaded_model.set_dev(self.dev)
         self.assertTrue(isclose(model_score, loaded_model.score(self.X, self.y)))
 
     def test_post_fit_serialization(self) -> None:
