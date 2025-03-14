@@ -432,7 +432,7 @@ class QNNModel(QMLModel, abc.ABC):
             return [qml.expval(qml.PauliZ((i))) for i in self.wires]
 
         if self.coupling_map:
-            circuit = transpile(coupling_map=self.coupling_map)(circuit)
+            circuit = transpile(circuit, coupling_map=self.coupling_map)
 
         return qml.QNode(circuit, self.dev, interface=interface)
 
@@ -1008,7 +1008,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         kernel_circuit = qml.QNode(kernel_circuit, device=self.dev)
 
         if self.coupling_map:
-            kernel_circuit = transpile(coupling_map=self.coupling_map)(kernel_circuit)
+            kernel_circuit = transpile(kernel_circuit, coupling_map=self.coupling_map)
 
         def kernel(
             weights: Sequence[float],
