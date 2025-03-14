@@ -186,11 +186,16 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
 
         model_score: float = self.model.score(self.x, self.y)
 
+        # It seems that we cannot serialize pennylane device
+        self.model.dev = None
+
         with open("qml_test.dil", "wb") as f:
             dill.dump(self.model, f)
 
         with open("qml_test.dil", "rb") as f:
             loaded_model: QNNModel = dill.load(f)
+
+        loaded_model.dev = self.dev
 
         self.assertTrue(isclose(model_score, loaded_model.score(self.x, self.y)))
 
@@ -266,7 +271,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
 
         n_qubits: int = 2
 
-        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
+        self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -285,7 +290,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
-            device=dev,
+            device=self.dev,
         )
 
         self.alternate_model: QNNBinaryClassifier = QNNBinaryClassifier(
@@ -294,7 +299,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=alternate_layers,
-            device=dev,
+            device=self.dev,
         )
 
 
@@ -1019,6 +1024,7 @@ class TestRBMClustering(unittest.TestCase):
         final_score: float = rand_score(self.y, predictions)
 
         self.assertGreater(final_score, initial_score)
+
 
 if __name__ == "__main__":
     unittest.main()
