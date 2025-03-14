@@ -69,6 +69,7 @@ from aqmlator.qml import (
     RBMClustering,
 )
 
+from lightning.pytorch.utilities import disable_possible_user_warnings
 
 class TestQNNModel(unittest.TestCase, abc.ABC):
     """
@@ -914,7 +915,7 @@ class TestRBMClustering(unittest.TestCase):
         """
         Sets up the test case.
         """
-        lightning.pytorch.seed_everything(0, workers=True)  # Fix the seed.
+        lightning.pytorch.seed_everything(42, workers=True, verbose=False)  # Fix the seed.
 
         lbae_input_size: Tuple[int, ...] = (1, 1, 8, 8)
         lbae_out_channels: int = 8
@@ -947,6 +948,8 @@ class TestRBMClustering(unittest.TestCase):
             dataset,  # type: ignore
             batch_size=batch_size,
             shuffle=True,
+            num_workers=1,
+            persistent_workers=True
         )
 
         self.rbm_clustering: RBMClustering = RBMClustering(
@@ -962,6 +965,8 @@ class TestRBMClustering(unittest.TestCase):
 
         self.x = self.X_tensor[0].view(1, 1, 8, 8)
 
+        disable_possible_user_warnings()
+
     def tearDown(self) -> None:
         """
         Tears down the test case.
@@ -973,7 +978,6 @@ class TestRBMClustering(unittest.TestCase):
         A common part of the tests for the fit method.
         """
         self.rbm_clustering.fit(self.data_loader)
-        # self.assertTrue(True)
 
     def test_classical_clustering_fit_run(self) -> None:
         """
