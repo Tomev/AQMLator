@@ -1259,6 +1259,11 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         :param rng_seed:
             A seed used for random weights initialization.
         """
+        if not binary_classifiers:
+            binary_classifiers = self._prepare_default_binary_classifiers(batch_size)
+
+        self._binary_classifiers: Sequence[QNNBinaryClassifier] = binary_classifiers
+
         super().__init__(
             wires=wires,
             device=device,
@@ -1273,10 +1278,10 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         self.accuracy_threshold: float = accuracy_threshold
         self.n_classes = n_classes
 
-        if not binary_classifiers:
-            binary_classifiers = self._prepare_default_binary_classifiers(batch_size)
-
-        self._binary_classifiers: Sequence[QNNBinaryClassifier] = binary_classifiers
+    def set_dev(self, new_dev: Optional[qml.devices.Device]):
+        self.dev = new_dev
+        for classifier in self._binary_classifiers:
+            classifier.dev = new_dev
 
     def _prepare_default_binary_classifiers(
         self, batch_size: int
