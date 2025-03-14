@@ -328,7 +328,7 @@ class TestQNNLinearRegressor(TestQNNModel):
         )
 
         n_qubits: int = 2
-        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
+        self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -347,7 +347,7 @@ class TestQNNLinearRegressor(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
-            device=dev,
+            device=self.dev,
         )
 
         self.alternate_model: QNNLinearRegression = QNNLinearRegression(
@@ -356,7 +356,7 @@ class TestQNNLinearRegressor(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=alternate_layers,
-            device=dev,
+            device=self.dev,
         )
 
 
