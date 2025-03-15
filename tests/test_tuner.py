@@ -35,6 +35,7 @@ from typing import Sequence
 
 import numpy as np
 import pennylane as qml
+from lightning.pytorch.utilities import disable_possible_user_warnings
 from numpy.random import RandomState
 from numpy.typing import NDArray
 from sklearn.datasets import (
@@ -97,6 +98,8 @@ class TestModelFinder(unittest.TestCase):
         n_epochs: int = 3
 
         dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
+
+        disable_possible_user_warnings()
 
         self.binary_classifier_finder: ModelFinder = ModelFinder(
             task_type=MLTaskType.BINARY_CLASSIFICATION,

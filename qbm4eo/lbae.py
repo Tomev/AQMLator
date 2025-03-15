@@ -21,14 +21,16 @@ import torch
 from lightning.pytorch.core import LightningModule
 from lightning.pytorch.utilities.types import OptimizerLRScheduler
 
-# configure logging at the root level of Lightning
-logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
-
-from torch import Tensor, optim
+from torch import Tensor
+from torch.optim import Adam  # type: ignore
 
 from .decoder import LBAEDecoder
 from .encoder import LBAEEncoder
+
+
+# configure logging at the root level of Lightning
+logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
 
 def loss(xr: Tensor, x: Tensor) -> Tensor:
@@ -185,4 +187,4 @@ class LBAE(LightningModule):
         :return:
             A dictionary containing the configured optimizers.
         """
-        return {"optimizer": optim.Adam(self.parameters(), lr=1e-3)}
+        return {"optimizer": Adam(self.parameters(), lr=1e-3)}

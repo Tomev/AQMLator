@@ -40,6 +40,7 @@ import dill
 import lightning.pytorch.utilities.seed
 import pennylane as qml
 import torch
+import warnings
 from dwave.samplers import RandomSampler
 from lightning.pytorch.utilities import disable_possible_user_warnings
 from numpy import isclose
@@ -80,6 +81,7 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
 
     model: QNNModel
     alternate_model: QNNModel
+    dev: qml.devices.Device
 
     def setUp(self) -> None:
         """
@@ -165,9 +167,11 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         """
         Tests if the number of executions grows when the model is executed.
         """
-        self.model.predict(self.x)
+        with qml.Tracker(self.dev) as tracker:
+            self.model.predict(self.x)
+
         self.assertTrue(
-            self.model.n_executions() > 0, "The number of executions don't grow!"
+            tracker.totals["executions"] > 0, "The number of executions don't grow!"
         )
 
     def test_different_layers_predict_run(self) -> None:
@@ -479,10 +483,12 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         """
         Tests if the number of executions grows when the model is executed.
         """
-        self.classifier.fit(self.x, self.y)
-        self.classifier.predict(self.x)
+        with qml.Tracker(self.dev) as tracker:
+            self.classifier.fit(self.x, self.y)
+            self.classifier.predict(self.x)
+
         self.assertTrue(
-            self.classifier.n_executions() > 0, "The number of executions don't grow!"
+            tracker.totals["executions"] > 0, "The number of executions don't grow!"
         )
 
     def test_different_layers_learning_and_predict_run(
@@ -658,7 +664,7 @@ class TestQuantumClassifier(unittest.TestCase):
             dill.dump(self.classifier, f)
 
         with open("qml_test.dil", "rb") as f:
-            loaded_model: QNNModel = dill.load(f)
+            loaded_model: QNNClassifier = dill.load(f)
 
         loaded_model.set_dev(self.dev)
         self.assertTrue(isclose(model_score, loaded_model.score(self.X, self.y)))
@@ -688,6 +694,9 @@ class TestIBMQDevicesHandling(unittest.TestCase):
         """
         Sets up the tests. Called before every test.
         """
+        # TR: In case Qiskit and PennyLane versions are compatible. Latest aren't.
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+
         n_samples: int = 50
         seed: int = 0
 
@@ -1004,7 +1013,7 @@ class TestRBMClustering(unittest.TestCase):
         """
         Tests if the RBMClustering predict method runs and returns binary values.
         """
-        prediction: Tensor = self.rbm_clustering.predict(self.x)
+        prediction: Tensor = self.rbm_clustering.predict(self.x)[0]
 
         for val in prediction:
             self.assertTrue(val in (0, 1))
@@ -1021,7 +1030,7 @@ class TestRBMClustering(unittest.TestCase):
 
         for x in self.X_tensor:
             predictions.append(
-                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8)))
+                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8))[0])
             )
 
         initial_score: float = rand_score(self.y, predictions)
@@ -1032,7 +1041,7 @@ class TestRBMClustering(unittest.TestCase):
 
         for x in self.X_tensor:
             predictions.append(
-                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8)))
+                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8))[0])
             )
 
         final_score: float = rand_score(self.y, predictions)

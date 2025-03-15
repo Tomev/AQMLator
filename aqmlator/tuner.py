@@ -43,7 +43,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, U
 import optuna
 import pennylane as qml
 import pennylane.numpy as np
-import requests  # type: ignore[import-untyped]
+import requests
 from numpy.typing import NDArray
 from optuna.exceptions import ExperimentalWarning
 from optuna.samplers import TPESampler
@@ -453,7 +453,11 @@ class ModelFinder(OptunaOptimizer):
 
         # Type ignore the following line, because Torch isn't type-hinted well enough.
         data_loader: DataLoader[Tuple[Tensor, Tensor]] = DataLoader(
-            data  # type: ignore
+            data,  # type: ignore
+            batch_size=10,  # TR TODO: Make this a parameter?
+            shuffle=True,
+            num_workers=1,
+            persistent_workers=True,
         )
 
         for seed in range(self._n_seeds):
@@ -462,8 +466,9 @@ class ModelFinder(OptunaOptimizer):
             model.fit(data_loader)
 
             labels: List[Tuple[int, ...]] = [
-                tuple(model.predict(val[0])) for val in data_loader
+                tuple(t) for val in data_loader for t in model.predict(val[0])
             ]
+
             group_labels: List[Tuple[int, ...]] = list(set(labels))
             groups: List[int] = [group_labels.index(label) for label in labels]
 
@@ -487,18 +492,15 @@ class ModelFinder(OptunaOptimizer):
 
         The mean number of calls to the quantum machine during the fitting.
         """
-        quantum_device_calls: int = 0
-        self.dev.tracker.active = True
 
-        for seed in range(self._n_seeds):
-            model.dev = self.dev
-            model.seed(seed)
+        with qml.Tracker(self.dev, persistent=False) as tracker:
+            for seed in range(self._n_seeds):
+                model.dev = self.dev
+                model.seed(seed)
 
-            model.fit(self._x, self._y)
+                model.fit(self._x, self._y)
 
-            quantum_device_calls += model.n_executions()
-
-        return quantum_device_calls / self._n_seeds
+        return tracker.totals["executions"] / self._n_seeds
 
     def _classification_objective_function(self, trial: optuna.trial.Trial) -> float:
         """
@@ -522,6 +524,7 @@ class ModelFinder(OptunaOptimizer):
             self._optuna_postfix = f"_({i})"
 
             kwargs: Dict[str, Any] = self._suggest_supervised_model_kwargs(trial, "QNN")
+            kwargs["device"] = self.dev
 
             binary_classifiers_kwargs.append(kwargs)
 
@@ -818,16 +821,11 @@ class HyperparameterTuner(OptunaOptimizer):
         """
         self._model.optimizer = self._suggest_optimizer(trial)
 
-        initial_executions: int
-        executions_sum: int = 0
+        with qml.Tracker(self._model.dev, persistent=False) as tracker:
+            for _ in range(self._n_seeds):
+                self._model.weights = np.zeros_like(self._model.weights)
 
-        for _ in range(self._n_seeds):
-            initial_executions = self._model.n_executions()
-            self._model.weights = np.zeros_like(self._model.weights)
+                if self._y is not None:
+                    self._model.fit(self._x, self._y)
 
-            if self._y is not None:
-                self._model.fit(self._x, self._y)
-
-            executions_sum += self._model.n_executions() - initial_executions
-
-        return executions_sum / self._n_seeds
+        return tracker.totals["executions"] / self._n_seeds

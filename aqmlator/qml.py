@@ -121,7 +121,6 @@ class QMLModel(abc.ABC):
             A description of connections between the qubits in the device.
         """
         self.dev: qml.devices.Device = device
-        self.dev.tracker.active = True
 
         self.wires: Sequence[int]
 
@@ -177,15 +176,6 @@ class QMLModel(abc.ABC):
             New seed to be applied to the model.
         """
         self._rng_seed = new_seed
-
-    def n_executions(self) -> int:
-        """
-        Returns number of VQC executions so far.
-
-        :return:
-            Returns the number of times the quantum device was called.
-        """
-        return self.dev.tracker.totals["executions"]
 
     @abc.abstractmethod
     def fit(
@@ -1278,7 +1268,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         self.accuracy_threshold: float = accuracy_threshold
         self.n_classes = n_classes
 
-    def set_dev(self, new_dev: Optional[qml.devices.Device]):
+    def set_dev(self, new_dev: Optional[qml.devices.Device]) -> None:
         self.dev = new_dev
         for classifier in self._binary_classifiers:
             classifier.dev = new_dev
@@ -1528,6 +1518,10 @@ class RBMClustering:
         encoded_x: Tensor = self.lbae.encoder(x)[0]
         h_probs: NDArray[np.float32] = self.rbm.h_probs_given_v(
             encoded_x.detach().numpy()
-        )[0]
-        # print(h_probs)
-        return Tensor([1 if p > self.fireing_threshold else 0 for p in h_probs])
+        )
+        return Tensor(
+            [
+                [1 if p > self.fireing_threshold else 0 for p in h_prob]
+                for h_prob in h_probs
+            ]
+        )
