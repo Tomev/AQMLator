@@ -27,6 +27,7 @@
 
 =============================================================================
 """
+
 __author__ = "Tomasz Rybotycki"
 
 import unittest
@@ -200,3 +201,7 @@ class TestDataPreprocessing(unittest.TestCase):
                 == fitted_data[i].datum_target,
                 "Class of the fitted data has changed!",
             )
+
+
+if __name__ == "__main__":
+    unittest.main()

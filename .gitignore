@@ -12,3 +12,4 @@ aqmlator/ibmq_connection.py
 *\lightning_logs
 docs/build/
 dist/
+.vscode/*

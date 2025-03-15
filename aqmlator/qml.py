@@ -80,7 +80,8 @@ class QMLModel(abc.ABC):
     def __init__(
         self,
         wires: Union[int, Sequence[int]],
-        device: Optional[qml.Device] = None,
+        *,
+        device: Optional[qml.devices.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
@@ -119,7 +120,7 @@ class QMLModel(abc.ABC):
         :param coupling_map:
             A description of connections between the qubits in the device.
         """
-        self.dev: qml.Device = device
+        self.dev: qml.devices.Device = device
 
         self.wires: Sequence[int]
 
@@ -175,15 +176,6 @@ class QMLModel(abc.ABC):
             New seed to be applied to the model.
         """
         self._rng_seed = new_seed
-
-    def n_executions(self) -> int:
-        """
-        Returns number of VQC executions so far.
-
-        :return:
-            Returns the number of times the quantum device was called.
-        """
-        return self.dev.num_executions
 
     @abc.abstractmethod
     def fit(
@@ -260,7 +252,8 @@ class QNNModel(QMLModel, abc.ABC):
         wires: Union[int, Sequence[int]],
         batch_size: int,
         n_epochs: int = 1,
-        device: Optional[qml.Device] = None,
+        *,
+        device: Optional[qml.devices.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
@@ -275,7 +268,7 @@ class QNNModel(QMLModel, abc.ABC):
                 Sequence[ModelOutput],
             ]
         ] = None,
-        debug_flag: bool = True,
+        debug_flag: bool = False,
         coupling_map: Optional[Sequence[Sequence[int]]] = None,
         n_qubit: Optional[int] = None,
     ) -> None:
@@ -324,16 +317,16 @@ class QNNModel(QMLModel, abc.ABC):
         """
 
         super().__init__(
-            wires,
-            device,
-            optimizer,
-            embedding_method,
-            embedding_kwargs,
-            layers,
-            validation_set_size,
-            rng_seed,
-            coupling_map,
-            n_qubit,
+            wires=wires,
+            device=device,
+            optimizer=optimizer,
+            embedding_method=embedding_method,
+            embedding_kwargs=embedding_kwargs,
+            layers=layers,
+            validation_set_size=validation_set_size,
+            rng_seed=rng_seed,
+            coupling_map=coupling_map,
+            n_qubit=n_qubit,
         )
 
         self._n_epochs: int = n_epochs
@@ -394,7 +387,11 @@ class QNNModel(QMLModel, abc.ABC):
                 inputs = self._prepare_torch_inputs(inputs)
 
             with qml.QueuingManager.stop_recording():
-                ops = self._embedding_method(inputs, **self._embedding_kwargs).expand()
+                ops = qml.tape.QuantumScript(
+                    self._embedding_method(
+                        inputs, **self._embedding_kwargs
+                    ).decomposition()
+                )
 
             for op in ops:
                 qml.apply(op)
@@ -415,7 +412,9 @@ class QNNModel(QMLModel, abc.ABC):
                 layer_weights = layer_weights.reshape(layer_shape)
 
                 with qml.QueuingManager.stop_recording():
-                    ops = layer(layer_weights, wires=self.wires).expand()
+                    ops = qml.tape.QuantumScript(
+                        layer(layer_weights, wires=self.wires).decomposition()
+                    )
 
                 for op in ops:
                     qml.apply(op)
@@ -423,7 +422,7 @@ class QNNModel(QMLModel, abc.ABC):
             return [qml.expval(qml.PauliZ((i))) for i in self.wires]
 
         if self.coupling_map:
-            circuit = transpile(coupling_map=self.coupling_map)(circuit)
+            circuit = transpile(circuit, coupling_map=self.coupling_map)
 
         return qml.QNode(circuit, self.dev, interface=interface)
 
@@ -784,9 +783,10 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
     def __init__(
         self,
         wires: Union[int, Sequence[int]],
+        *,
         n_epochs: int = 10,
         kta_subset_size: int = 5,
-        device: Optional[qml.Device] = None,
+        device: Optional[qml.devices.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
@@ -795,7 +795,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         rng_seed: int = 42,
         accuracy_threshold: float = 0.8,
         validation_set_size: float = 0.2,
-        debug_flag: bool = True,
+        debug_flag: bool = False,
         coupling_map: Optional[Sequence[Sequence[int]]] = None,
     ) -> None:
         """
@@ -839,15 +839,15 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             A description of connections between the qubits in the device.
         """
         super().__init__(
-            wires,
-            device,
-            optimizer,
-            embedding_method,
-            embedding_kwargs,
-            layers,
-            validation_set_size,
-            rng_seed,
-            coupling_map,
+            wires=wires,
+            device=device,
+            optimizer=optimizer,
+            embedding_method=embedding_method,
+            embedding_kwargs=embedding_kwargs,
+            layers=layers,
+            validation_set_size=validation_set_size,
+            rng_seed=rng_seed,
+            coupling_map=coupling_map,
         )
 
         self.n_epochs: int = n_epochs
@@ -895,9 +895,11 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         for layer in self._layers:
             with qml.QueuingManager.stop_recording():
-                ops = self._embedding_method(
-                    features, **self._embedding_kwargs
-                ).expand()
+                ops = qml.tape.QuantumScript(
+                    self._embedding_method(
+                        features, **self._embedding_kwargs
+                    ).decomposition()
+                )
 
             for op in ops:
                 qml.apply(op)
@@ -911,7 +913,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             layer_weights = np.array(layer_weights).reshape(layer_shape)
 
             with qml.QueuingManager.stop_recording():
-                ops = layer(layer_weights, wires=self.wires).expand()
+                ops = qml.tape.QuantumScript(
+                    layer(layer_weights, wires=self.wires).decomposition()
+                )
 
             for op in ops:
                 qml.apply(op)
@@ -963,9 +967,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         """
 
         # Adjoint circuits is prepared pretty easily.
-        adjoint_ansatz: Callable[
-            [Sequence[float], Sequence[float]], None
-        ] = qml.adjoint(self._ansatz)
+        adjoint_ansatz: Callable[[Sequence[float], Sequence[float]], None] = (
+            qml.adjoint(self._ansatz)
+        )
 
         # @qml.qnode(self.dev)
         def kernel_circuit(
@@ -991,10 +995,10 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             adjoint_ansatz(weights, second_features)
             return qml.probs(wires=self.wires)
 
-        if self.coupling_map:
-            kernel_circuit = transpile(coupling_map=self.coupling_map)(kernel_circuit)
-
         kernel_circuit = qml.QNode(kernel_circuit, device=self.dev)
+
+        if self.coupling_map:
+            kernel_circuit = transpile(kernel_circuit, coupling_map=self.coupling_map)
 
         def kernel(
             weights: Sequence[float],
@@ -1038,9 +1042,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :return:
             The `kernel_matrix` function that uses the trained kernel.
         """
-        kernel: Callable[
-            [Sequence[float], Sequence[float], Sequence[float]], float
-        ] = self._create_kernel()
+        kernel: Callable[[Sequence[float], Sequence[float], Sequence[float]], float] = (
+            self._create_kernel()
+        )
 
         return qml.kernels.kernel_matrix(
             list(x),
@@ -1080,9 +1084,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         if y is None:
             raise AttributeError("Missing y in supervised learning model.")
 
-        kernel: Callable[
-            [Sequence[float], Sequence[float], Sequence[float]], float
-        ] = self._create_kernel()
+        kernel: Callable[[Sequence[float], Sequence[float], Sequence[float]], float] = (
+            self._create_kernel()
+        )
 
         self._split_data_for_training(X, y)
 
@@ -1192,10 +1196,11 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         self,
         wires: Union[int, Sequence[int]],
         n_classes: int,
+        *,
         binary_classifiers: Optional[Sequence[QNNBinaryClassifier]] = None,
         batch_size: int = 10,
         accuracy_threshold: float = 0.8,
-        device: Optional[qml.Device] = None,
+        device: Optional[qml.devices.Device] = None,
         optimizer: Optional[GradientDescentOptimizer] = None,
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
@@ -1208,7 +1213,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
 
         :param wires:
             The wires to use in the VQC or the number of qubits (and wires) used in the
-            VQC. It will be used in the `qml.Device` specification.
+            VQC. It will be used in the `qml.devices.Device` specification.
         :param n_classes:
             The number of classes in the classification task.
         :param binary_classifiers:
@@ -1244,24 +1249,29 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         :param rng_seed:
             A seed used for random weights initialization.
         """
+        if not binary_classifiers:
+            binary_classifiers = self._prepare_default_binary_classifiers(batch_size)
+
+        self._binary_classifiers: Sequence[QNNBinaryClassifier] = binary_classifiers
+
         super().__init__(
-            wires,
-            device,
-            optimizer,
-            embedding_method,
-            embedding_kwargs,
-            layers,
-            validation_set_size,
-            rng_seed,
+            wires=wires,
+            device=device,
+            optimizer=optimizer,
+            embedding_method=embedding_method,
+            embedding_kwargs=embedding_kwargs,
+            layers=layers,
+            validation_set_size=validation_set_size,
+            rng_seed=rng_seed,
         )
 
         self.accuracy_threshold: float = accuracy_threshold
         self.n_classes = n_classes
 
-        if not binary_classifiers:
-            binary_classifiers = self._prepare_default_binary_classifiers(batch_size)
-
-        self._binary_classifiers: Sequence[QNNBinaryClassifier] = binary_classifiers
+    def set_dev(self, new_dev: Optional[qml.devices.Device]) -> None:
+        self.dev = new_dev
+        for classifier in self._binary_classifiers:
+            classifier.dev = new_dev
 
     def _prepare_default_binary_classifiers(
         self, batch_size: int
@@ -1410,6 +1420,7 @@ class RBMClustering:
         lbae_out_channels: int,
         lbae_n_layers: int,
         rbm_n_visible_neurons: int,
+        *,
         rbm_n_hidden_neurons: int,
         n_gpus: int = 0,
         n_epochs: int = 100,
@@ -1419,6 +1430,7 @@ class RBMClustering:
         fireing_threshold: float = 0.8,
         rng: Optional[np.random.Generator] = None,
     ) -> None:
+
         self.lbae: LBAE = LBAE(
             input_size=lbae_input_shape[1:],  # TR: Notice shape reduction.
             out_channels=lbae_out_channels,
@@ -1451,11 +1463,10 @@ class RBMClustering:
             num_nodes=n_gpus,
             max_epochs=self.n_epochs,
             deterministic=True,
+            enable_progress_bar=False,
         )
 
-        print("LBAE training start.")
         lbae_trainer.fit(self.lbae, data_loader)
-        print("LBAE training finished.")
 
         rbm_trainer: RBMTrainer
         # Pick a trainer depending on the existence of the sampler.
@@ -1470,11 +1481,9 @@ class RBMClustering:
                 num_steps=self.n_epochs,
             )
 
-        print("RBM training start.")
         rbm_trainer.fit(
             self.rbm, self._encoded_data_loader(data_loader, self.lbae.encoder)
         )
-        print("RBM training finished.")
 
     @staticmethod
     def _encoded_data_loader(
@@ -1509,6 +1518,10 @@ class RBMClustering:
         encoded_x: Tensor = self.lbae.encoder(x)[0]
         h_probs: NDArray[np.float32] = self.rbm.h_probs_given_v(
             encoded_x.detach().numpy()
-        )[0]
-        # print(h_probs)
-        return Tensor([1 if p > self.fireing_threshold else 0 for p in h_probs])
+        )
+        return Tensor(
+            [
+                [1 if p > self.fireing_threshold else 0 for p in h_prob]
+                for h_prob in h_probs
+            ]
+        )

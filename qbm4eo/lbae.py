@@ -14,15 +14,23 @@ POIR.04.02.00-00-D014/20-00.
 =============================================================================
 """
 
+import logging
 from typing import Any, Dict, Tuple
 
 import torch
 from lightning.pytorch.core import LightningModule
 from lightning.pytorch.utilities.types import OptimizerLRScheduler
-from torch import Tensor, optim
+
+
+from torch import Tensor
+from torch.optim import Adam  # type: ignore
 
 from .decoder import LBAEDecoder
 from .encoder import LBAEEncoder
+
+
+# configure logging at the root level of Lightning
+logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
 
 def loss(xr: Tensor, x: Tensor) -> Tensor:
@@ -51,9 +59,9 @@ class LBAE(LightningModule):
         out_channels: int,
         latent_space_size: int,
         num_layers: int,
-        quantize: bool,
         *args: Dict[str, Any],
-        **kwargs: Dict[str, Any]
+        quantize: bool,
+        **kwargs: Dict[str, Any],
     ) -> None:
         """
         A default constructor for the LBAE class.
@@ -82,11 +90,18 @@ class LBAE(LightningModule):
         )
 
         self.encoder: LBAEEncoder = LBAEEncoder(
-            input_size, out_channels, latent_space_size, num_layers, quantize
+            input_size=input_size,
+            out_channels=out_channels,
+            latent_space_size=latent_space_size,
+            num_layers=num_layers,
+            quantize=quantize,
         )
 
         self.decoder: LBAEDecoder = LBAEDecoder(
-            self.encoder.final_conv_size, input_size, latent_space_size, num_layers
+            input_size=self.encoder.final_conv_size,
+            output_size=input_size,
+            latent_space_size=latent_space_size,
+            num_layers=num_layers,
         )
 
         self.epoch: int = 0
@@ -172,4 +187,4 @@ class LBAE(LightningModule):
         :return:
             A dictionary containing the configured optimizers.
         """
-        return {"optimizer": optim.Adam(self.parameters(), lr=1e-3)}
+        return {"optimizer": Adam(self.parameters(), lr=1e-3)}

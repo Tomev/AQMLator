@@ -182,3 +182,7 @@ class TestDataAcquisition(unittest.TestCase):
                 self._supervised_learning_data[i] == data[i],
                 "SupervisedLearningDatum wasn't read properly.",
             )
+
+
+if __name__ == "__main__":
+    unittest.main()

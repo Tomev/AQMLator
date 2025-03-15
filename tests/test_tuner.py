@@ -35,6 +35,7 @@ from typing import Sequence
 
 import numpy as np
 import pennylane as qml
+from lightning.pytorch.utilities import disable_possible_user_warnings
 from numpy.random import RandomState
 from numpy.typing import NDArray
 from sklearn.datasets import (
@@ -96,7 +97,9 @@ class TestModelFinder(unittest.TestCase):
         n_trials: int = 4
         n_epochs: int = 3
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
+        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
+
+        disable_possible_user_warnings()
 
         self.binary_classifier_finder: ModelFinder = ModelFinder(
             task_type=MLTaskType.BINARY_CLASSIFICATION,
@@ -200,7 +203,7 @@ class TestHyperparameterTuner(unittest.TestCase):
         n_trials: int = 2
         n_qubits: int = 2
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
+        dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         classifier: QNNBinaryClassifier = QNNBinaryClassifier(2, 20, 5, device=dev)
 
@@ -217,3 +220,7 @@ class TestHyperparameterTuner(unittest.TestCase):
         Tests if `HyperparameterTuner` runs.
         """
         self.tuner.find_hyperparameters()
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -32,7 +32,7 @@ class ResBlockDeConvPart(nn.Module):
         *args: Dict[str, Any],
         negative_slope: float = 0.02,
         bias: bool = False,
-        **kwargs: Dict[str, Any]
+        **kwargs: Dict[str, Any],
     ) -> None:
         """
         A default constructor for the ResBlockDeConvPart class.
@@ -83,7 +83,7 @@ class ResBlockDeConv(nn.Module):
         in_channels: Optional[int] = None,
         negative_slope: float = 0.02,
         bias: bool = False,
-        **kwargs: Dict[str, Any]
+        **kwargs: Dict[str, Any],
     ) -> None:
         """
         A default constructor for the ResBlockDeConv class.
@@ -156,7 +156,7 @@ class LBAEDecoder(nn.Module):
         *args: Dict[str, Any],
         negative_slope: float = 0.02,
         bias: bool = False,
-        **kwargs: Dict[str, Any]
+        **kwargs: Dict[str, Any],
     ) -> None:
         """
         A default constructor for the LBAEDecoder class.

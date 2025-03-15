@@ -40,7 +40,9 @@ import dill
 import lightning.pytorch.utilities.seed
 import pennylane as qml
 import torch
+import warnings
 from dwave.samplers import RandomSampler
+from lightning.pytorch.utilities import disable_possible_user_warnings
 from numpy import isclose
 from numpy.random import RandomState
 from numpy.typing import NDArray
@@ -48,7 +50,7 @@ from pennylane import numpy as np
 from pennylane.measurements import ExpectationMP
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
-from qiskit_ibm_provider import IBMProvider
+from qiskit_ibm_runtime import QiskitRuntimeService
 from sklearn.datasets import (
     load_digits,
     make_classification,
@@ -79,6 +81,7 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
 
     model: QNNModel
     alternate_model: QNNModel
+    dev: qml.devices.Device
 
     def setUp(self) -> None:
         """
@@ -164,9 +167,11 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
         """
         Tests if the number of executions grows when the model is executed.
         """
-        self.model.predict(self.x)
+        with qml.Tracker(self.dev) as tracker:
+            self.model.predict(self.x)
+
         self.assertTrue(
-            self.model.n_executions() > 0, "The number of executions don't grow!"
+            tracker.totals["executions"] > 0, "The number of executions don't grow!"
         )
 
     def test_different_layers_predict_run(self) -> None:
@@ -186,11 +191,16 @@ class TestQNNModel(unittest.TestCase, abc.ABC):
 
         model_score: float = self.model.score(self.x, self.y)
 
+        # It seems that we cannot serialize pennylane device
+        self.model.dev = None
+
         with open("qml_test.dil", "wb") as f:
             dill.dump(self.model, f)
 
         with open("qml_test.dil", "rb") as f:
             loaded_model: QNNModel = dill.load(f)
+
+        loaded_model.dev = self.dev
 
         self.assertTrue(isclose(model_score, loaded_model.score(self.x, self.y)))
 
@@ -266,7 +276,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
 
         n_qubits: int = 2
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
+        self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -285,7 +295,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
-            device=dev,
+            device=self.dev,
         )
 
         self.alternate_model: QNNBinaryClassifier = QNNBinaryClassifier(
@@ -294,7 +304,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=alternate_layers,
-            device=dev,
+            device=self.dev,
         )
 
 
@@ -323,7 +333,7 @@ class TestQNNLinearRegressor(TestQNNModel):
         )
 
         n_qubits: int = 2
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_qubits)
+        self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -342,7 +352,7 @@ class TestQNNLinearRegressor(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
-            device=dev,
+            device=self.dev,
         )
 
         self.alternate_model: QNNLinearRegression = QNNLinearRegression(
@@ -351,7 +361,7 @@ class TestQNNLinearRegressor(TestQNNModel):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=alternate_layers,
-            device=dev,
+            device=self.dev,
         )
 
 
@@ -384,7 +394,9 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.n_qubits: int = 2
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=self.n_qubits)
+        self.dev: qml.devices.Device = qml.device(
+            "lightning.qubit", wires=self.n_qubits
+        )
 
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
@@ -403,7 +415,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
-            device=dev,
+            device=self.dev,
         )
 
         self.alternate_classifier: QuantumKernelBinaryClassifier = (
@@ -412,7 +424,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
                 n_epochs=self.n_epochs,
                 accuracy_threshold=accuracy_threshold,
                 layers=alternate_layers,
-                device=dev,
+                device=self.dev,
             )
         )
 
@@ -471,10 +483,12 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         """
         Tests if the number of executions grows when the model is executed.
         """
-        self.classifier.fit(self.x, self.y)
-        self.classifier.predict(self.x)
+        with qml.Tracker(self.dev) as tracker:
+            self.classifier.fit(self.x, self.y)
+            self.classifier.predict(self.x)
+
         self.assertTrue(
-            self.classifier.n_executions() > 0, "The number of executions don't grow!"
+            tracker.totals["executions"] > 0, "The number of executions don't grow!"
         )
 
     def test_different_layers_learning_and_predict_run(
@@ -523,12 +537,15 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         model_score: float = self.classifier.score(self.x, self.y)
 
+        self.classifier.dev = None
+
         with open("qml_test.dil", "wb") as f:
             dill.dump(self.classifier, f)
 
         with open("qml_test.dil", "rb") as f:
             loaded_model: QNNModel = dill.load(f)
 
+        loaded_model.dev = self.dev
         self.assertTrue(isclose(model_score, loaded_model.score(self.x, self.y)))
 
     def test_post_fit_serialization(self) -> None:
@@ -576,11 +593,14 @@ class TestQuantumClassifier(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        dev: qml.Device = qml.device("lightning.qubit", wires=n_features)
+        self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_features)
 
         classifiers: List[QNNBinaryClassifier] = [
             QNNBinaryClassifier(
-                wires=n_features, batch_size=batch_size, n_epochs=n_epochs, device=dev
+                wires=n_features,
+                batch_size=batch_size,
+                n_epochs=n_epochs,
+                device=self.dev,
             )
             for _ in range(n_classes)
         ]
@@ -589,7 +609,7 @@ class TestQuantumClassifier(unittest.TestCase):
             wires=n_features,
             binary_classifiers=classifiers,
             n_classes=n_classes,
-            device=dev,
+            device=self.dev,
         )
 
     def tearDown(self) -> None:
@@ -638,13 +658,15 @@ class TestQuantumClassifier(unittest.TestCase):
         """
 
         model_score: float = self.classifier.score(self.X, self.y)
+        self.classifier.set_dev(None)
 
         with open("qml_test.dil", "wb") as f:
             dill.dump(self.classifier, f)
 
         with open("qml_test.dil", "rb") as f:
-            loaded_model: QNNModel = dill.load(f)
+            loaded_model: QNNClassifier = dill.load(f)
 
+        loaded_model.set_dev(self.dev)
         self.assertTrue(isclose(model_score, loaded_model.score(self.X, self.y)))
 
     def test_post_fit_serialization(self) -> None:
@@ -672,6 +694,9 @@ class TestIBMQDevicesHandling(unittest.TestCase):
         """
         Sets up the tests. Called before every test.
         """
+        # TR: In case Qiskit and PennyLane versions are compatible. Latest aren't.
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+
         n_samples: int = 50
         seed: int = 0
 
@@ -708,8 +733,8 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        provider = IBMProvider(instance="ibm-q/open/main")
-        backends = provider.backends()
+        service = QiskitRuntimeService(instance="ibm-q/open/main")
+        backends = service.backends()
 
         for i in range(len(backends)):
             if (
@@ -725,16 +750,14 @@ class TestIBMQDevicesHandling(unittest.TestCase):
 
         self.coupling_map: List[Sequence[int]] = config.coupling_map
 
-        self.dev: qml.Device = qml.device(
+        self.dev: qml.devices.Device = qml.device(
             "qiskit.aer",
             wires=self.n_features,
-            backend="aer_simulator_statevector",
         )
 
         self.coupled_dev = qml.device(
             "qiskit.aer",
             wires=self.n_features,
-            backend="aer_simulator_statevector",
             coupling_map=self.coupling_map,
         )
 
@@ -745,7 +768,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
     def _proceed_with_qek_classifier_test(
         self,
         coupling_map: Optional[List[Sequence[int]]] = None,
-        dev: Optional[qml.Device] = None,
+        dev: Optional[qml.devices.Device] = None,
     ) -> None:
         """
         A common part of all the QEK Classifier-related tests. Test is passed if the
@@ -772,7 +795,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
     def _proceed_with_qnn_regressor_test(
         self,
         coupling_map: Optional[List[Sequence[int]]] = None,
-        dev: Optional[qml.Device] = None,
+        dev: Optional[qml.devices.Device] = None,
     ) -> None:
         """
         A common part of all the QNN Regressor-related tests. Test is passed if the
@@ -800,7 +823,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
     def _proceed_wth_qnn_classifier_test(
         self,
         coupling_map: Optional[List[Sequence[int]]] = None,
-        dev: Optional[qml.Device] = None,
+        dev: Optional[qml.devices.Device] = None,
     ) -> None:
         """
         A common part of all the QNN Classifier-related tests. Test is passed if the
@@ -905,7 +928,9 @@ class TestRBMClustering(unittest.TestCase):
         """
         Sets up the test case.
         """
-        lightning.pytorch.seed_everything(0, workers=True)  # Fix the seed.
+        lightning.pytorch.seed_everything(
+            42, workers=True, verbose=False
+        )  # Fix the seed.
 
         lbae_input_size: Tuple[int, ...] = (1, 1, 8, 8)
         lbae_out_channels: int = 8
@@ -938,6 +963,8 @@ class TestRBMClustering(unittest.TestCase):
             dataset,  # type: ignore
             batch_size=batch_size,
             shuffle=True,
+            num_workers=1,
+            persistent_workers=True,
         )
 
         self.rbm_clustering: RBMClustering = RBMClustering(
@@ -953,6 +980,8 @@ class TestRBMClustering(unittest.TestCase):
 
         self.x = self.X_tensor[0].view(1, 1, 8, 8)
 
+        disable_possible_user_warnings()
+
     def tearDown(self) -> None:
         """
         Tears down the test case.
@@ -964,7 +993,6 @@ class TestRBMClustering(unittest.TestCase):
         A common part of the tests for the fit method.
         """
         self.rbm_clustering.fit(self.data_loader)
-        # self.assertTrue(True)
 
     def test_classical_clustering_fit_run(self) -> None:
         """
@@ -985,7 +1013,7 @@ class TestRBMClustering(unittest.TestCase):
         """
         Tests if the RBMClustering predict method runs and returns binary values.
         """
-        prediction: Tensor = self.rbm_clustering.predict(self.x)
+        prediction: Tensor = self.rbm_clustering.predict(self.x)[0]
 
         for val in prediction:
             self.assertTrue(val in (0, 1))
@@ -1002,7 +1030,7 @@ class TestRBMClustering(unittest.TestCase):
 
         for x in self.X_tensor:
             predictions.append(
-                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8)))
+                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8))[0])
             )
 
         initial_score: float = rand_score(self.y, predictions)
@@ -1013,9 +1041,13 @@ class TestRBMClustering(unittest.TestCase):
 
         for x in self.X_tensor:
             predictions.append(
-                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8)))
+                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8))[0])
             )
 
         final_score: float = rand_score(self.y, predictions)
 
         self.assertGreater(final_score, initial_score)
+
+
+if __name__ == "__main__":
+    unittest.main()
