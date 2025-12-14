@@ -43,7 +43,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, U
 import optuna
 import pennylane as qml
 import pennylane.numpy as np
-import requests
+import requests  # type: ignore
 from numpy.typing import NDArray
 from optuna.exceptions import ExperimentalWarning
 from optuna.samplers import TPESampler
@@ -453,7 +453,7 @@ class ModelFinder(OptunaOptimizer):
 
         # Type ignore the following line, because Torch isn't type-hinted well enough.
         data_loader: DataLoader[Tuple[Tensor, Tensor]] = DataLoader(
-            data,  # type: ignore
+            data,
             batch_size=10,  # TR TODO: Make this a parameter?
             shuffle=True,
             num_workers=1,

@@ -733,7 +733,8 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        service = QiskitRuntimeService(instance="ibm-q/open/main")
+        service = QiskitRuntimeService(channel="ibm_quantum_platform")
+
         backends = service.backends()
 
         for i in range(len(backends)):
@@ -759,6 +760,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             "qiskit.aer",
             wires=self.n_features,
             coupling_map=self.coupling_map,
+            basis_gates=config.to_dict()["basis_gates"]  # To remove the issue of 3-qubit gates in qiskit.aer basis_gates
         )
 
         self.layers: List[Type[Operation]] = [
@@ -960,7 +962,7 @@ class TestRBMClustering(unittest.TestCase):
 
         # Ignore mypy problem with the type of the dataset.
         self.data_loader: DataLoader[Tuple[Tensor, Tensor]] = DataLoader(
-            dataset,  # type: ignore
+            dataset,
             batch_size=batch_size,
             shuffle=True,
             num_workers=1,

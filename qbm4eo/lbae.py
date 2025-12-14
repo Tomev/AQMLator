@@ -23,7 +23,7 @@ from lightning.pytorch.utilities.types import OptimizerLRScheduler
 
 
 from torch import Tensor
-from torch.optim import Adam  # type: ignore
+from torch.optim import Adam
 
 from .decoder import LBAEDecoder
 from .encoder import LBAEEncoder
@@ -142,11 +142,11 @@ class LBAE(LightningModule):
             self.reference_image = x[0:1, :, :, :]
 
         xr: Tensor = self.forward(x)
-        l: Tensor = loss(xr.view(x.size()), x)
+        loss_value: Tensor = loss(xr.view(x.size()), x)
 
-        self.log("loss", l, logger=True)
+        self.log("loss", loss_value, logger=True)
 
-        return l
+        return loss_value
 
     def predict_step(
         self, batch: Any, batch_idx: int, dataloader_idx: int = ...  # type: ignore
