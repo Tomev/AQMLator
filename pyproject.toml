@@ -12,6 +12,11 @@ url = "https://test.pypi.org/simple/"
 publish-url = "https://test.pypi.org/legacy/"
 explicit = true
 
+[tool.uv.sources]
+# Remember to change branch to main after the merge request.
+qmetric = { git = "https://gitlab.com/illesova.silvie.scholar/qmetric.git", branch = "tr_xqml" }
+
+
 [project]
 name = "AQMLator"
 version = "0.2.1a1"
@@ -32,6 +37,7 @@ dependencies = [
     "pennylane-qiskit==0.43.0",
     "psycopg2>=2.9.11",
     "qiskit-aer>=0.17.2",
+    "qmetric",
     "requests>=2.32.5",
     "ruff>=0.14.9",
     "scikit-learn>=1.8.0",
