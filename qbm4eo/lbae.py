@@ -31,6 +31,7 @@ from .encoder import LBAEEncoder
 
 # configure logging at the root level of Lightning
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
+logging.getLogger("pytorch_lightning").setLevel(logging.ERROR)
 
 
 def loss(xr: Tensor, x: Tensor) -> Tensor:
@@ -149,7 +150,10 @@ class LBAE(LightningModule):
         return loss_value
 
     def predict_step(
-        self, batch: Any, batch_idx: int, dataloader_idx: int = ...  # type: ignore
+        self,
+        batch: Any,
+        batch_idx: int,
+        dataloader_idx: int = ...,  # type: ignore
     ) -> Any:
         """
         A function for predicting the output of the model.

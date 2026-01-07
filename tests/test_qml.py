@@ -733,7 +733,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        service = QiskitRuntimeService(channel="ibm_quantum_platform")
+        service = QiskitRuntimeService(channel="ibm_quantum_platform", token=os.environ["IBMQ_TOKEN"])
 
         backends = service.backends()
 
@@ -760,7 +760,9 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             "qiskit.aer",
             wires=self.n_features,
             coupling_map=self.coupling_map,
-            basis_gates=config.to_dict()["basis_gates"]  # To remove the issue of 3-qubit gates in qiskit.aer basis_gates
+            basis_gates=config.to_dict()[
+                "basis_gates"
+            ],  # To remove the issue of 3-qubit gates in qiskit.aer basis_gates
         )
 
         self.layers: List[Type[Operation]] = [

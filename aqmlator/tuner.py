@@ -40,6 +40,7 @@ from math import ceil, floor, prod, sqrt
 from os import environ
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
+import qiskit
 import optuna
 import pennylane as qml
 import pennylane.numpy as np
@@ -58,6 +59,7 @@ from sklearn.metrics import silhouette_score  # TR: It has bounds.
 from torch import Tensor
 from torch.utils.data import DataLoader
 
+
 from aqmlator.qml import (
     QMLModel,
     QNNBinaryClassifier,
@@ -67,6 +69,14 @@ from aqmlator.qml import (
     RBMClustering,
 )
 from aqmlator.server import status_update_endpoint
+
+from pennylane_qiskit.converter import circuit_to_qiskit
+from qiskit.quantum_info import Statevector
+from qmetric.quantum_circuit_metrics import (
+    quantum_locality_ratio,
+    effective_entanglement_entropy,
+    quantum_mutual_information,
+)
 
 # TODO TR:  Should those be global?
 
@@ -333,7 +343,9 @@ class ModelFinder(OptunaOptimizer):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=ExperimentalWarning)
             sampler: TPESampler = TPESampler(
-                seed=0, multivariate=True, group=True  # For experiments repeatability.
+                seed=0,
+                multivariate=True,
+                group=True,  # For experiments repeatability.
             )
 
         study: optuna.study.Study = optuna.create_study(
@@ -768,7 +780,9 @@ class HyperparameterTuner(OptunaOptimizer):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=ExperimentalWarning)
             sampler: TPESampler = TPESampler(
-                seed=0, multivariate=True, group=True  # For experiments repeatability.
+                seed=0,
+                multivariate=True,
+                group=True,  # For experiments repeatability.
             )
 
         study: optuna.study.Study = optuna.create_study(
@@ -776,6 +790,7 @@ class HyperparameterTuner(OptunaOptimizer):
             study_name=self._study_name,
             load_if_exists=True,
             storage=self._get_storage(),
+            directions=["minimize", "maximize", "maximize", "minimize"],
         )
 
         study.optimize(
@@ -810,7 +825,7 @@ class HyperparameterTuner(OptunaOptimizer):
 
         return optimizer
 
-    def _optuna_objective(self, trial: optuna.trial.Trial) -> float:
+    def _optuna_objective(self, trial: optuna.trial.Trial) -> Tuple[float, ...]:
         """
         Objective function of the `optuna` optimizer.
 
@@ -828,4 +843,27 @@ class HyperparameterTuner(OptunaOptimizer):
                 if self._y is not None:
                     self._model.fit(self._x, self._y)
 
-        return tracker.totals["executions"] / self._n_seeds
+        avg_n_exec: float = tracker.totals["executions"] / self._n_seeds
+
+        pennylane_circuit: qml.QNode = self._model.create_circuit()
+        tape: qml.tape.QuantumScript = qml.tape.make_qscript(pennylane_circuit)(
+            self._x[0], self._model.weights
+        )
+        qiskit_cirtuit: qiskit.QuantumCircuit = circuit_to_qiskit(
+            tape, self._model.n_qubit
+        )
+        qiskit_cirtuit.remove_final_measurements()
+
+        final_state = Statevector.from_instruction(qiskit_cirtuit)
+        subsystem_a: List[int] = list(range(self._model.n_qubit // 2))
+        subsystem_b: List[int] = list(
+            range(self._model.n_qubit // 2, self._model.n_qubit)
+        )
+
+        qlr: float = quantum_locality_ratio(qiskit_cirtuit)
+        eee: float = effective_entanglement_entropy(
+            final_state, subsystem_qubits=subsystem_a
+        )
+        qmi = quantum_mutual_information(final_state, subsystem_a, subsystem_b)
+
+        return avg_n_exec, qlr, eee, qmi

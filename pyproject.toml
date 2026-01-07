@@ -13,7 +13,6 @@ publish-url = "https://test.pypi.org/legacy/"
 explicit = true
 
 [tool.uv.sources]
-# Remember to change branch to main after the merge request.
 qmetric = { git = "https://gitlab.com/illesova.silvie.scholar/qmetric.git", branch = "tr_xqml" }
 
 
@@ -36,8 +35,9 @@ dependencies = [
     "pennylane-lightning>=0.43.0",
     "pennylane-qiskit==0.43.0",
     "psycopg2>=2.9.11",
+    "qiskit==2.1.0",
     "qiskit-aer>=0.17.2",
-    "qmetric",
+    "qmetric @ git+ssh://git@gitlab.com/illesova.silvie.scholar/qmetric.git@tr_xqml",
     "requests>=2.32.5",
     "ruff>=0.14.9",
     "scikit-learn>=1.8.0",
