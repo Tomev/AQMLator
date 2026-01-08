@@ -30,6 +30,7 @@ dependencies = [
     "dwave-ocean-sdk>=9.2.0",
     "fastapi>=0.124.4",
     "lightning[extra]>=2.6.0",
+    "numpy==2.3",
     "optuna>=4.6.0",
     "pennylane>=0.43.1",
     "pennylane-lightning>=0.43.0",

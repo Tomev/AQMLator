@@ -378,10 +378,11 @@ class QNNModel(QMLModel, abc.ABC):
 
         :param interface: _description_, defaults to "autograd"
         :type interface: str, optional
-        
+
         :return: _description_
         :rtype: qml.QNode
         """
+
         def circuit(
             inputs: Union[Sequence[float], torch.Tensor],
             weights: Union[np.ndarray, torch.Tensor],
@@ -900,7 +901,11 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         self._classifier: SVC = SVC()
 
-    def _ansatz(self, weights: Sequence[float], features: Sequence[float]) -> None:
+    def _ansatz(
+        self,
+        features: Sequence[float],
+        weights: Sequence[float],
+    ) -> None:
         """
         A VQC ansatz that will be used in defining the quantum kernel function.
 
@@ -967,7 +972,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             :return:
                 The result of `qml.PauliZ` measurements on the feature map VQC.
             """
-            self._ansatz(weights, features)
+            self._ansatz(features, weights)
 
             # TODO TR: Is this a good measurement to return?
             return [qml.expval(qml.PauliZ((i,))) for i in self.wires]
@@ -987,7 +992,16 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :return: _description_
         :rtype: qml.QNode
         """
-        return qml.QNode(self._ansatz, interface=interface)
+
+        def circuit(
+            features: Sequence[float], weights: Sequence[float]
+        ) -> Sequence[float]:
+            self._ansatz(features, weights)
+            return [
+                qml.expval(qml.PauliZ((i))) for i in self.wires
+            ]  # Doesn't matter anyway. Will be deleted.
+
+        return qml.QNode(circuit, device=self.dev, interface=interface)
 
     def _create_kernel(
         self,
@@ -1025,8 +1039,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             :return:
                 The probability of observing respective computational-base states.
             """
-            self._ansatz(weights, first_features)
-            adjoint_ansatz(weights, second_features)
+            self._ansatz(first_features, weights)
+            adjoint_ansatz(second_features, weights)
             return qml.probs(wires=self.wires)
 
         kernel_circuit = qml.QNode(kernel_circuit, device=self.dev)
@@ -1509,7 +1523,7 @@ class RBMClustering:
             max_epochs=self.n_epochs,
             deterministic=True,
             enable_progress_bar=False,
-            enable_model_summary=False
+            enable_model_summary=False,
         )
 
         lbae_trainer.fit(self.lbae, data_loader)

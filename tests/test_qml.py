@@ -695,7 +695,8 @@ class TestIBMQDevicesHandling(unittest.TestCase):
         Sets up the tests. Called before every test.
         """
         # TR: In case Qiskit and PennyLane versions are compatible. Latest aren't.
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        # warnings.filterwarnings("ignore", category=DeprecationWarning)
+        warnings.filterwarnings("ignore")
 
         n_samples: int = 50
         seed: int = 0
@@ -733,7 +734,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        service = QiskitRuntimeService(channel="ibm_quantum_platform", token=os.environ["IBMQ_TOKEN"])
+        service = QiskitRuntimeService(channel="ibm_quantum_platform", token=os.environ["IBMQ_TOKEN"], instance=os.environ["IBMQ_CRN"])
 
         backends = service.backends()
 
