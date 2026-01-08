@@ -241,6 +241,18 @@ class QMLModel(abc.ABC):
             random_state=self._rng_seed,
         )
 
+    @abc.abstractmethod
+    def create_circuit(self, interface: str = "autograd") -> qml.QNode:
+        """TODO TR
+
+        :param interface: _description_, defaults to "autograd"
+        :type interface: str, optional
+        :raises NotImplementedError: _description_
+        :return: _description_
+        :rtype: qml.QNode
+        """
+        raise NotImplementedError
+
 
 class QNNModel(QMLModel, abc.ABC):
     """
@@ -359,7 +371,18 @@ class QNNModel(QMLModel, abc.ABC):
             [Sequence[Sequence[float]]], Union[Sequence[int], Sequence[float]]
         ] = prediction_function
 
-    def _create_circuit(self, interface: str = "autograd") -> qml.QNode:
+    def create_circuit(self, interface: str = "autograd") -> qml.QNode:
+        """Creates a `qml.QNode`.
+
+        TODO TR
+
+        :param interface: _description_, defaults to "autograd"
+        :type interface: str, optional
+
+        :return: _description_
+        :rtype: qml.QNode
+        """
+
         def circuit(
             inputs: Union[Sequence[float], torch.Tensor],
             weights: Union[np.ndarray, torch.Tensor],
@@ -442,7 +465,7 @@ class QNNModel(QMLModel, abc.ABC):
         """
 
         if not self.circuit:
-            self.circuit = self._create_circuit()
+            self.circuit = self.create_circuit()
 
         expectation_values: List[Sequence[float]] = []
 
@@ -523,7 +546,7 @@ class QNNModel(QMLModel, abc.ABC):
         if y is None:
             raise AttributeError("Missing y in supervised learning model.")
 
-        self.circuit = self._create_circuit()
+        self.circuit = self.create_circuit()
 
         self._split_data_for_training(X, y)
 
@@ -641,7 +664,7 @@ class QNNModel(QMLModel, abc.ABC):
         """
 
         weight_shapes: Dict[str, int] = {"weights": len(self.weights)}
-        return qml.qnn.TorchLayer(self._create_circuit("torch"), weight_shapes)
+        return qml.qnn.TorchLayer(self.create_circuit("torch"), weight_shapes)
 
     def predict(
         self, features: Sequence[Sequence[float]]
@@ -655,7 +678,7 @@ class QNNModel(QMLModel, abc.ABC):
             Values predicted for given features.
         """
 
-        self.circuit = self._create_circuit()
+        self.circuit = self.create_circuit()
 
         results: Union[Sequence[int], Sequence[float]] = self._prediction_function(
             self.get_circuit_expectation_values(features)
@@ -695,7 +718,7 @@ class QNNBinaryClassifier(ClassifierMixin, QNNModel):
             The value of the square loss function.
         """
 
-        self.circuit = self._create_circuit()
+        self.circuit = self.create_circuit()
 
         expectation_values: np.ndarray = np.array(
             [self.circuit(x, weights)[0] for x in X]
@@ -742,7 +765,7 @@ class QNNLinearRegression(RegressorMixin, QNNModel):
         :return:
             The value of the square loss function.
         """
-        self.circuit = self._create_circuit()
+        self.circuit = self.create_circuit()
 
         expected_values = [self.circuit(x, weights) for x in X]
 
@@ -878,7 +901,11 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         self._classifier: SVC = SVC()
 
-    def _ansatz(self, weights: Sequence[float], features: Sequence[float]) -> None:
+    def _ansatz(
+        self,
+        features: Sequence[float],
+        weights: Sequence[float],
+    ) -> None:
         """
         A VQC ansatz that will be used in defining the quantum kernel function.
 
@@ -945,7 +972,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             :return:
                 The result of `qml.PauliZ` measurements on the feature map VQC.
             """
-            self._ansatz(weights, features)
+            self._ansatz(features, weights)
 
             # TODO TR: Is this a good measurement to return?
             return [qml.expval(qml.PauliZ((i,))) for i in self.wires]
@@ -954,6 +981,27 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             transform = transpile(coupling_map=self.coupling_map)(transform)
 
         return qml.QNode(transform, self.dev)
+
+    def create_circuit(self, interface: str = "autograd") -> qml.QNode:
+        """TODO
+
+        For interface compatibility.
+
+        :param interface: _description_, defaults to "autograd"
+        :type interface: str, optional
+        :return: _description_
+        :rtype: qml.QNode
+        """
+
+        def circuit(
+            features: Sequence[float], weights: Sequence[float]
+        ) -> Sequence[float]:
+            self._ansatz(features, weights)
+            return [
+                qml.expval(qml.PauliZ((i))) for i in self.wires
+            ]  # Doesn't matter anyway. Will be deleted.
+
+        return qml.QNode(circuit, device=self.dev, interface=interface)
 
     def _create_kernel(
         self,
@@ -991,8 +1039,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             :return:
                 The probability of observing respective computational-base states.
             """
-            self._ansatz(weights, first_features)
-            adjoint_ansatz(weights, second_features)
+            self._ansatz(first_features, weights)
+            adjoint_ansatz(second_features, weights)
             return qml.probs(wires=self.wires)
 
         kernel_circuit = qml.QNode(kernel_circuit, device=self.dev)
@@ -1191,6 +1239,18 @@ class QNNClassifier(QMLModel, ClassifierMixin):
     This class implements a quantum classifier based on the multiple binary quantum
     classifiers.
     """
+
+    def create_circuit(self, interface: str = "autograd") -> qml.QNode:
+        """TODO
+
+        placeholder to be refactored
+
+        :param interface: _description_, defaults to "autograd"
+        :type interface: str, optional
+        :return: _description_
+        :rtype: qml.QNode
+        """
+        return qml.QNode(None, interface=interface)
 
     def __init__(
         self,
@@ -1430,7 +1490,6 @@ class RBMClustering:
         fireing_threshold: float = 0.8,
         rng: Optional[np.random.Generator] = None,
     ) -> None:
-
         self.lbae: LBAE = LBAE(
             input_size=lbae_input_shape[1:],  # TR: Notice shape reduction.
             out_channels=lbae_out_channels,
@@ -1464,6 +1523,7 @@ class RBMClustering:
             max_epochs=self.n_epochs,
             deterministic=True,
             enable_progress_bar=False,
+            enable_model_summary=False,
         )
 
         lbae_trainer.fit(self.lbae, data_loader)

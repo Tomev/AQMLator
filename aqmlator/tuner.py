@@ -40,10 +40,11 @@ from math import ceil, floor, prod, sqrt
 from os import environ
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
+import qiskit
 import optuna
 import pennylane as qml
 import pennylane.numpy as np
-import requests
+import requests  # type: ignore
 from numpy.typing import NDArray
 from optuna.exceptions import ExperimentalWarning
 from optuna.samplers import TPESampler
@@ -58,6 +59,7 @@ from sklearn.metrics import silhouette_score  # TR: It has bounds.
 from torch import Tensor
 from torch.utils.data import DataLoader
 
+
 from aqmlator.qml import (
     QMLModel,
     QNNBinaryClassifier,
@@ -68,8 +70,15 @@ from aqmlator.qml import (
 )
 from aqmlator.server import status_update_endpoint
 
-# TODO TR:  Should those be global?
+from pennylane_qiskit.converter import circuit_to_qiskit
+from qiskit.quantum_info import Statevector
+from qmetric.quantum_circuit_metrics import (
+    quantum_locality_ratio,
+    effective_entanglement_entropy,
+    quantum_mutual_information,
+)
 
+# TODO TR:  Should those be global?
 binary_classifiers: Dict[str, Dict[str, Any]] = {
     "QNN": {
         "constructor": QNNBinaryClassifier,
@@ -166,7 +175,7 @@ class OptunaOptimizer(abc.ABC):
 
     def __init__(
         self,
-        features: Union[Sequence[Sequence[float]], NDArray[np.float32]],
+        features: Union[Sequence[Sequence[float]], NDArray[np.floating]],
         classes: Optional[Sequence[int]],
         *,
         study_name: str = "",
@@ -196,7 +205,7 @@ class OptunaOptimizer(abc.ABC):
         :param n_seeds:
             Number of seeds checked per `optuna` trial.
         """
-        self._x: Union[Sequence[Sequence[float]], NDArray[np.float32]] = features
+        self._x: Union[Sequence[Sequence[float]], NDArray[np.floating]] = features
         self._y: Optional[Sequence[int]] = classes
 
         self._study_name: str = study_name
@@ -225,7 +234,7 @@ class ModelFinder(OptunaOptimizer):
 
     def __init__(
         self,
-        task_type: str,
+        task_type: MLTaskType,
         features: Union[Sequence[Sequence[float]], NDArray[np.float32]],
         classes: Optional[Sequence[int]] = None,
         *,
@@ -286,14 +295,15 @@ class ModelFinder(OptunaOptimizer):
         # model finding.
         self._models_dict: Dict[str, Any] = {}
 
-        self._task_type: str = task_type
+        self._task_type: MLTaskType = task_type
 
         self._n_epochs: int = n_epochs
 
         self._minimal_accuracy: float = minimal_accuracy
 
         self._optuna_objective_functions: Dict[
-            str, Callable[[optuna.trial.Trial], float]
+            MLTaskType,
+            Callable[[optuna.trial.Trial], Tuple[float, float, float, float]],
         ] = {
             MLTaskType.BINARY_CLASSIFICATION: self._simple_model_objective_function,
             MLTaskType.CLASSIFICATION: self._classification_objective_function,
@@ -315,7 +325,9 @@ class ModelFinder(OptunaOptimizer):
                 timeout=1,
             )
         except requests.exceptions.ConnectionError as e:
-            print(e)
+            del e
+            # print(e)
+            pass
 
     def find_model(self) -> None:
         """
@@ -328,12 +340,16 @@ class ModelFinder(OptunaOptimizer):
                 timeout=1,
             )
         except requests.exceptions.ConnectionError as e:
-            print(e)
+            # print(e)
+            del e
+            pass
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=ExperimentalWarning)
             sampler: TPESampler = TPESampler(
-                seed=0, multivariate=True, group=True  # For experiments repeatability.
+                seed=0,
+                multivariate=True,
+                group=True,  # For experiments repeatability.
             )
 
         study: optuna.study.Study = optuna.create_study(
@@ -341,6 +357,7 @@ class ModelFinder(OptunaOptimizer):
             study_name=self._study_name,
             load_if_exists=True,
             storage=self._get_storage(),
+            directions=["minimize", "maximize", "maximize", "minimize"],
         )
 
         study.optimize(
@@ -358,7 +375,9 @@ class ModelFinder(OptunaOptimizer):
         except requests.exceptions.ConnectionError as e:
             print(e)
 
-    def _simple_model_objective_function(self, trial: optuna.trial.Trial) -> float:
+    def _simple_model_objective_function(
+        self, trial: optuna.trial.Trial
+    ) -> Tuple[float, float, float, float]:
         """
         Default objective function of the `optuna` optimizer for the model finding. It
         is meant to work for all the simple (single) models.
@@ -389,7 +408,9 @@ class ModelFinder(OptunaOptimizer):
 
         return self._evaluate_supervised_model(model)
 
-    def _grouping_model_objective_function(self, trial: optuna.trial.Trial) -> float:
+    def _grouping_model_objective_function(
+        self, trial: optuna.trial.Trial
+    ) -> Tuple[float, float, float, float]:
         """
         Objective function of the `optuna` optimizer for grouping model finder.
 
@@ -430,7 +451,9 @@ class ModelFinder(OptunaOptimizer):
         if self._task_type == MLTaskType.GROUPING:
             self._models_dict = clustering
 
-    def _evaluate_unsupervised_model(self, model: RBMClustering) -> float:
+    def _evaluate_unsupervised_model(
+        self, model: RBMClustering
+    ) -> Tuple[float, float, float, float]:
         """
         Evaluates the performance of the given model. The evaluation is based on the
         Silhouette score (which takes values from [-1, 1]). The higher the score, the
@@ -453,7 +476,7 @@ class ModelFinder(OptunaOptimizer):
 
         # Type ignore the following line, because Torch isn't type-hinted well enough.
         data_loader: DataLoader[Tuple[Tensor, Tensor]] = DataLoader(
-            data,  # type: ignore
+            data,
             batch_size=10,  # TR TODO: Make this a parameter?
             shuffle=True,
             num_workers=1,
@@ -479,9 +502,11 @@ class ModelFinder(OptunaOptimizer):
             else:
                 score += 1
 
-        return score / self._n_seeds
+        return score / self._n_seeds, 0, 0, 0  # TODO: 0s are just placeholders
 
-    def _evaluate_supervised_model(self, model: QMLModel) -> float:
+    def _evaluate_supervised_model(
+        self, model: QMLModel
+    ) -> Tuple[float, float, float, float]:
         """
         Evaluates the performance of the given model. The evaluation is based on the
         number of calls to the quantum machine (which are _expensive_) during the
@@ -500,9 +525,33 @@ class ModelFinder(OptunaOptimizer):
 
                 model.fit(self._x, self._y)
 
-        return tracker.totals["executions"] / self._n_seeds
+        avg_n_exec: float = tracker.totals["executions"] / self._n_seeds
 
-    def _classification_objective_function(self, trial: optuna.trial.Trial) -> float:
+        if isinstance(model, QNNClassifier):
+            return avg_n_exec, 0, 0, 0
+
+        pennylane_circuit: qml.QNode = model.create_circuit()
+        tape: qml.tape.QuantumScript = qml.tape.make_qscript(pennylane_circuit)(
+            self._x[0], np.array(model.weights)
+        )
+        qiskit_cirtuit: qiskit.QuantumCircuit = circuit_to_qiskit(tape, model.n_qubit)
+        qiskit_cirtuit.remove_final_measurements()
+
+        final_state = Statevector.from_instruction(qiskit_cirtuit)
+        subsystem_a: List[int] = list(range(model.n_qubit // 2))
+        subsystem_b: List[int] = list(range(model.n_qubit // 2, model.n_qubit))
+
+        qlr: float = quantum_locality_ratio(qiskit_cirtuit)
+        eee: float = effective_entanglement_entropy(
+            final_state, subsystem_qubits=subsystem_a
+        )
+        qmi = quantum_mutual_information(final_state, subsystem_a, subsystem_b)
+
+        return avg_n_exec, qlr, eee, qmi
+
+    def _classification_objective_function(
+        self, trial: optuna.trial.Trial
+    ) -> Tuple[float, float, float, float]:
         """
         Objective function of the `optuna` optimizer for classification model finder.
 
@@ -704,7 +753,9 @@ class ModelFinder(OptunaOptimizer):
                 timeout=1,
             )
         except requests.exceptions.ConnectionError as e:
-            print(e)
+            del e
+            # print(e)
+            pass
 
 
 class HyperparameterTuner(OptunaOptimizer):
@@ -768,7 +819,9 @@ class HyperparameterTuner(OptunaOptimizer):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=ExperimentalWarning)
             sampler: TPESampler = TPESampler(
-                seed=0, multivariate=True, group=True  # For experiments repeatability.
+                seed=0,
+                multivariate=True,
+                group=True,  # For experiments repeatability.
             )
 
         study: optuna.study.Study = optuna.create_study(
@@ -776,6 +829,7 @@ class HyperparameterTuner(OptunaOptimizer):
             study_name=self._study_name,
             load_if_exists=True,
             storage=self._get_storage(),
+            directions=["minimize", "maximize", "maximize", "minimize"],
         )
 
         study.optimize(
@@ -810,7 +864,7 @@ class HyperparameterTuner(OptunaOptimizer):
 
         return optimizer
 
-    def _optuna_objective(self, trial: optuna.trial.Trial) -> float:
+    def _optuna_objective(self, trial: optuna.trial.Trial) -> Tuple[float, ...]:
         """
         Objective function of the `optuna` optimizer.
 
@@ -828,4 +882,27 @@ class HyperparameterTuner(OptunaOptimizer):
                 if self._y is not None:
                     self._model.fit(self._x, self._y)
 
-        return tracker.totals["executions"] / self._n_seeds
+        avg_n_exec: float = tracker.totals["executions"] / self._n_seeds
+
+        pennylane_circuit: qml.QNode = self._model.create_circuit()
+        tape: qml.tape.QuantumScript = qml.tape.make_qscript(pennylane_circuit)(
+            self._x[0], self._model.weights
+        )
+        qiskit_cirtuit: qiskit.QuantumCircuit = circuit_to_qiskit(
+            tape, self._model.n_qubit
+        )
+        qiskit_cirtuit.remove_final_measurements()
+
+        final_state = Statevector.from_instruction(qiskit_cirtuit)
+        subsystem_a: List[int] = list(range(self._model.n_qubit // 2))
+        subsystem_b: List[int] = list(
+            range(self._model.n_qubit // 2, self._model.n_qubit)
+        )
+
+        qlr: float = quantum_locality_ratio(qiskit_cirtuit)
+        eee: float = effective_entanglement_entropy(
+            final_state, subsystem_qubits=subsystem_a
+        )
+        qmi = quantum_mutual_information(final_state, subsystem_a, subsystem_b)
+
+        return avg_n_exec, qlr, eee, qmi

@@ -33,17 +33,21 @@ The package is available on pip, and can be installed using
 
 `pip install aqmlator`
 
+or 
+
+`uv add aqmlator`
+
 To install the package from the sources, run
 
-`pip install .`
+`uv pip install .`
 
 To develop the package, run
 
-`pip install -e .`
+`uv pip install -e .`
 
 To install the packages required for development, run
 
-`pip install -r requirements -r requirements-dev.txt`
+`uv sync`
 
 ### Setup
 
@@ -62,6 +66,8 @@ We use `tox` to run full package tests. To do so, simply call
 tox
 ```
 in the project folder.
+
+We suggest using `tox-uv` for faster environment preparation.
 
 ## Access
 

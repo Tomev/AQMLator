@@ -1,19 +1,62 @@
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.9.17,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = ["aqmlator", "qbm4eo"]
+module-root = ""
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
+
+[tool.uv.sources]
+qmetric = { git = "https://gitlab.com/illesova.silvie.scholar/qmetric.git", branch = "tr_xqml" }
+
 
 [project]
 name = "AQMLator"
+version = "0.2.1a1"
 authors = [
     {name="Tomasz Rybotycki", email="rybotycki.tomasz+aqmlator@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.11"
-
-dynamic = ["version", "description", "license", "classifiers", "dependencies"]
+requires-python = ">=3.13"
+description="A package for auto quantum machine learning-izing your experiments!"
+dependencies = [
+    "dill>=0.4.0",
+    "dwave-ocean-sdk>=9.2.0",
+    "fastapi>=0.124.4",
+    "lightning[extra]>=2.6.0",
+    "numpy==2.3",
+    "optuna>=4.6.0",
+    "pennylane>=0.43.1",
+    "pennylane-lightning>=0.43.0",
+    "pennylane-qiskit==0.43.0",
+    "psycopg2>=2.9.11",
+    "qiskit==2.1.0",
+    "qiskit-aer>=0.17.2",
+    "qmetric @ git+ssh://git@gitlab.com/illesova.silvie.scholar/qmetric.git@tr_xqml",
+    "requests>=2.32.5",
+    "ruff>=0.14.9",
+    "scikit-learn>=1.8.0",
+    "types-requests>=2.32.4.20250913",
+    "uvicorn>=0.38.0",
+]
+classifiers=[
+        "Programming Language :: Python :: 3",
+        "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: Apache Software License",
+        "Natural Language :: English",
+        "Operating System :: OS Independent",
+        "Topic :: Scientific/Engineering",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        "Topic :: Scientific/Engineering :: Physics",
+]
+license="Apache-2.0"
 
 [project.urls]
 documentation = "https://aqmlator.readthedocs.io/en/latest/index.html"
 repository = "https://github.com/Tomev/AQMLator"
-
-
