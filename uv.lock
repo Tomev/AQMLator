@@ -152,7 +152,7 @@ wheels = [
 
 [[package]]
 name = "aqmlator"
-version = "0.2.1a1"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "dill" },

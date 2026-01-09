@@ -18,7 +18,7 @@ qmetric = { git = "https://gitlab.com/illesova.silvie.scholar/qmetric.git", bran
 
 [project]
 name = "AQMLator"
-version = "0.2.1a1"
+version = "1.0.0"
 authors = [
     {name="Tomasz Rybotycki", email="rybotycki.tomasz+aqmlator@gmail.com"}
 ]
