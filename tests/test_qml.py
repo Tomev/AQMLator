@@ -734,7 +734,11 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             random_state=RandomState(seed),
         )
 
-        service = QiskitRuntimeService(channel="ibm_quantum_platform", token=os.environ["IBMQ_TOKEN"], instance=os.environ["IBMQ_CRN"])
+        service = QiskitRuntimeService(
+            channel="ibm_quantum_platform",
+            token=os.environ["IBMQ_TOKEN"],
+            instance=os.environ["IBMQ_CRN"],
+        )
 
         backends = service.backends()
 

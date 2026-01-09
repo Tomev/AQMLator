@@ -15,10 +15,35 @@ explicit = true
 [tool.uv.sources]
 qmetric = { git = "https://gitlab.com/illesova.silvie.scholar/qmetric.git", branch = "tr_xqml" }
 
+[tool.deptry.package_module_name_map]
+fastapi = "fastapi"
+ruff = "ruff"
+dill = "dill"
+dwave-ocean-sdk = "dimod"
+scikit-learn = "sklearn"
+tqdm = "tqdm"
+psycopg2 = "psycopg2"
+optuna = "optuna"
+requests = "requests"
+torch = "torch"
+lightning = "lightning"
+numpy = "numpy"
+pennylane = "pennylane"
+pennylane-lightning = "pennylane_lightning"
+qiskit = "qiskit"
+qmetric = "qmetric"
+pennylane-qiskit = "pennylane_qiskit"
+qiskit-aer = "qiskit_aer"
+scipt = "scipy"
+
+
+[tool.deptry.per_rule_ignores]
+DEP002 = ["ruff", "dill", "psycopg2", "pennylane-lightning", "qiskit-aer"]
+
 
 [project]
 name = "AQMLator"
-version = "0.2.1a1"
+version = "1.0.0"
 authors = [
     {name="Tomasz Rybotycki", email="rybotycki.tomasz+aqmlator@gmail.com"}
 ]
@@ -28,7 +53,6 @@ description="A package for auto quantum machine learning-izing your experiments!
 dependencies = [
     "dill>=0.4.0",
     "dwave-ocean-sdk>=9.2.0",
-    "fastapi>=0.124.4",
     "lightning[extra]>=2.6.0",
     "numpy==2.3",
     "optuna>=4.6.0",
@@ -39,11 +63,11 @@ dependencies = [
     "qiskit==2.1.0",
     "qiskit-aer>=0.17.2",
     "qmetric @ git+ssh://git@gitlab.com/illesova.silvie.scholar/qmetric.git@tr_xqml",
-    "requests>=2.32.5",
     "ruff>=0.14.9",
     "scikit-learn>=1.8.0",
-    "types-requests>=2.32.4.20250913",
-    "uvicorn>=0.38.0",
+    "scipy>=1.16.3",
+    "torch>=2.9.1",
+    "tqdm>=4.67.1",
 ]
 classifiers=[
         "Programming Language :: Python :: 3",
@@ -60,3 +84,9 @@ license="Apache-2.0"
 [project.urls]
 documentation = "https://aqmlator.readthedocs.io/en/latest/index.html"
 repository = "https://github.com/Tomev/AQMLator"
+
+[dependency-groups]
+dev = [
+    "deptry>=0.24.0",
+    "ruff>=0.14.10",
+]

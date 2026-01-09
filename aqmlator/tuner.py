@@ -32,7 +32,6 @@
 __author__ = "Tomasz Rybotycki"
 
 import abc
-import json
 import uuid
 import warnings
 from enum import StrEnum
@@ -44,7 +43,6 @@ import qiskit
 import optuna
 import pennylane as qml
 import pennylane.numpy as np
-import requests  # type: ignore
 from numpy.typing import NDArray
 from optuna.exceptions import ExperimentalWarning
 from optuna.samplers import TPESampler
@@ -68,7 +66,6 @@ from aqmlator.qml import (
     QuantumKernelBinaryClassifier,
     RBMClustering,
 )
-from aqmlator.server import status_update_endpoint
 
 from pennylane_qiskit.converter import circuit_to_qiskit
 from qiskit.quantum_info import Statevector
@@ -318,32 +315,10 @@ class ModelFinder(OptunaOptimizer):
 
         self.d_wave_access: bool = d_wave_access
 
-        try:
-            requests.post(
-                status_update_endpoint,
-                data=json.dumps({self._study_name: "Waiting..."}),
-                timeout=1,
-            )
-        except requests.exceptions.ConnectionError as e:
-            del e
-            # print(e)
-            pass
-
     def find_model(self) -> None:
         """
         Finds the QNN model that best fits the given data.
         """
-        try:
-            requests.post(
-                status_update_endpoint,
-                data=json.dumps({self._study_name: "Tuning..."}),
-                timeout=1,
-            )
-        except requests.exceptions.ConnectionError as e:
-            # print(e)
-            del e
-            pass
-
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=ExperimentalWarning)
             sampler: TPESampler = TPESampler(
@@ -365,15 +340,6 @@ class ModelFinder(OptunaOptimizer):
             n_trials=self._n_trials,
             n_jobs=self._n_cores,
         )
-
-        try:
-            requests.post(
-                status_update_endpoint,
-                data=json.dumps({self._study_name: "Done."}),
-                timeout=1,
-            )
-        except requests.exceptions.ConnectionError as e:
-            print(e)
 
     def _simple_model_objective_function(
         self, trial: optuna.trial.Trial
@@ -744,18 +710,6 @@ class ModelFinder(OptunaOptimizer):
 
         kwargs["layers"] = layers
         kwargs.pop("n_layers")
-
-    def __del__(self) -> None:
-        try:
-            requests.post(
-                status_update_endpoint,
-                data=json.dumps({self._study_name: "Delete"}),
-                timeout=1,
-            )
-        except requests.exceptions.ConnectionError as e:
-            del e
-            # print(e)
-            pass
 
 
 class HyperparameterTuner(OptunaOptimizer):
