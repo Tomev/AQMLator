@@ -32,7 +32,6 @@
 __author__ = "Tomasz Rybotycki"
 
 import abc
-import json
 import uuid
 import warnings
 from enum import StrEnum
@@ -44,7 +43,6 @@ import qiskit
 import optuna
 import pennylane as qml
 import pennylane.numpy as np
-import requests  # type: ignore
 from numpy.typing import NDArray
 from optuna.exceptions import ExperimentalWarning
 from optuna.samplers import TPESampler
