@@ -60,3 +60,9 @@ license="Apache-2.0"
 [project.urls]
 documentation = "https://aqmlator.readthedocs.io/en/latest/index.html"
 repository = "https://github.com/Tomev/AQMLator"
+
+[dependency-groups]
+dev = [
+    "deptry>=0.24.0",
+    "ruff>=0.14.10",
+]
