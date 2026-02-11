@@ -76,6 +76,8 @@ from qmetric.quantum_circuit_metrics import (
 )
 
 # TODO TR:  Should those be global?
+# TODO(TR): Implement data uploading https://arxiv.org/pdf/2512.05183
+#           Check if it can be used as a reuploading scheme?
 binary_classifiers: Dict[str, Dict[str, Any]] = {
     "QNN": {
         "constructor": QNNBinaryClassifier,
@@ -114,7 +116,11 @@ clustering: Dict[str, Dict[str, Any]] = {
 }
 
 data_embeddings: Dict[str, Dict[str, Any]] = {
-    "ANGLE": {"constructor": AngleEmbedding, "kwargs": {}, "fixed_kwargs": {}},
+    "ANGLE": {
+        "constructor": AngleEmbedding,
+        "kwargs": {"rotation": ["X", "Y"]},
+        "fixed_kwargs": {},
+    },
     "AMPLITUDE": {
         "constructor": AmplitudeEmbedding,
         "kwargs": {},
@@ -154,6 +160,16 @@ layer_types: Dict[str, Dict[str, Any]] = {
     "STRONGLY_ENTANGLING": {
         "constructor": StronglyEntanglingLayers,
     },
+}
+
+
+reuploading_types: Dict[str, Dict[str, Any]] = {
+    "ANGLE": {
+        "constructor": AngleEmbedding,
+        "kwargs": {"rotation": ["X", "Y", "Z"]},
+        "fixed_kwargs": {},
+    },
+    "IDENTITY": {"constructor": None, "kwargs": {}, "fixed_kwargs": {}},
 }
 
 
@@ -690,6 +706,11 @@ class ModelFinder(OptunaOptimizer):
         Using `optuna`, suggest the order of layers in the VQC based on the `kwargs`
         given.
 
+        .. important::
+
+            Each QML model layer is a data (re)-uploading, weighted layer pair. Since each our model starts with a data
+            uplading scheme, first data re-uploading should always be an identity. This will make the processing easier.
+
         :param trial:
             Optuna `Trial` object that "suggests" the parameters values.
         :param kwargs:
@@ -697,18 +718,37 @@ class ModelFinder(OptunaOptimizer):
             QML model.
         """
         layers: List[Type[qml.operation.Operation]] = []
+        reuploaders: list[Type[qml.operation.Operation] | None] = [None]
+        reuploaders_kwargs: list[dict[str, Any]] = [{}]
 
         for i in range(kwargs["n_layers"]):
+            # Select the layer.
             layer_type: str = trial.suggest_categorical(
                 f"layer_{i}" + self._optuna_postfix, list(layer_types)
             )
             layers.append(layer_types[layer_type]["constructor"])
+
+            # Select the reuploader and it's kwargs.
+            reuploader_type: str = trial.suggest_categorical(
+                f"reuploader_{i + 1}{self._optuna_postfix}", list(reuploading_types)
+            )
+            reuploaders.append(reuploading_types[reuploader_type]["constructor"])
+            reuploaders_kwargs.append({"wires": range(kwargs["wires"])})
+
+            # TODO(TR): For now, only categorical are allowed, if any. This class needs a dire refactor anyway.
+            for kwarg in list(reuploading_types[reuploader_type]["kwargs"]):
+                reuploaders_kwargs[-1][kwarg] = trial.suggest_categorical(
+                    f"reuploader_{i}_{kwarg}{self._optuna_postfix}",
+                    reuploading_types[reuploader_type]["kwargs"][kwarg],
+                )
 
             # TR:   So far all the layer types begin with (N_LAYERS, N_WIRES) tuple, and
             #       then proceed with some additional parameters. This may need to be
             #       rethought later.
 
         kwargs["layers"] = layers
+        kwargs["reuploaders"] = reuploaders
+        kwargs["reuploaders_kwargs"] = reuploaders_kwargs
         kwargs.pop("n_layers")
 
 

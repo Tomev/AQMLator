@@ -86,6 +86,8 @@ class QMLModel(abc.ABC):
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
         layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
+        reuploaders: Optional[Sequence[None | Type[qml.operation.Operation]]] = None,
+        reuploaders_kwargs: Optional[Sequence[Dict[str, Any]]] = None,
         validation_set_size: float = 0.2,
         rng_seed: int = 42,
         coupling_map: Optional[Sequence[Sequence[int]]] = None,
@@ -112,6 +114,10 @@ class QMLModel(abc.ABC):
         :param layers:
             Layers to be used in the VQC. The layers will be applied in the given order.
             A double `StronglyEntanglingLayer` will be used if `None` is given.
+        :param reuploaders:
+            TODO(TR)
+        param reuploaders_kwargs:
+            TODO(TR)
         :param validation_set_size:
             A part of the training set that will be used for QMLModel validation.
             It should be from (0, 1).
@@ -150,6 +156,18 @@ class QMLModel(abc.ABC):
         else:
             self._layers = layers
 
+        self._reuploaders: Sequence[None | Type[qml.operation.Operation]]
+        if reuploaders is None:
+            self._reuploaders = [None] * len(self._layers)
+        else:
+            self._reuploaders = reuploaders
+
+        self._reuploaders_kwargs: Sequence[Dict[str, Any]]
+        if reuploaders_kwargs is None:
+            self._reuploaders_kwargs = [{}] * len(self._reuploaders)
+        else:
+            self._reuploaders_kwargs = reuploaders_kwargs
+
         self._rng_seed: int = rng_seed
         self._rng: random.Random = random.Random(rng_seed)
 
@@ -167,6 +185,34 @@ class QMLModel(abc.ABC):
             n_qubit = len(self.wires)
 
         self.n_qubit: int = n_qubit
+
+    @staticmethod
+    def upload_data(
+        data: Union[Sequence[float], torch.Tensor],
+        uploading_constructor: qml.operation.Operation,
+        kwargs: dict[str, Any],
+    ) -> None:
+        """_summary_
+        # TODO(TR): Ugly. Refactor. Temporary...
+
+        :param data: _description_
+        :type data: _type_
+        :param uploading_constructor: _description_
+        :type uploading_constructor: _type_
+        :param kwargs: _description_
+        :type kwargs: _type_
+        :return: _description_
+        :rtype: _type_
+        """
+        if uploading_constructor is None:
+            return  # Identity
+
+        with qml.QueuingManager.stop_recording():
+            ops = qml.tape.QuantumScript(
+                uploading_constructor(data, **kwargs).decomposition()
+            )
+        for op in ops:
+            qml.apply(op)
 
     def seed(self, new_seed: int) -> None:
         """
@@ -270,6 +316,8 @@ class QNNModel(QMLModel, abc.ABC):
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
         layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
+        reuploaders: Optional[Sequence[None | Type[qml.operation.Operation]]] = None,
+        reuploaders_kwargs: Optional[Sequence[Dict[str, Any]]] = None,
         accuracy_threshold: float = 0.8,
         initial_weights: Optional[Sequence[float]] = None,
         rng_seed: int = 42,
@@ -286,6 +334,7 @@ class QNNModel(QMLModel, abc.ABC):
     ) -> None:
         """
         The constructor for the `QNNModel` class.
+        TODO(TR): Add reuploaders info.
 
         :param wires:
             The wires to use in the VQC or the number of qubits (and wires) used in the
@@ -335,6 +384,8 @@ class QNNModel(QMLModel, abc.ABC):
             embedding_method=embedding_method,
             embedding_kwargs=embedding_kwargs,
             layers=layers,
+            reuploaders=reuploaders,
+            reuploaders_kwargs=reuploaders_kwargs,
             validation_set_size=validation_set_size,
             rng_seed=rng_seed,
             coupling_map=coupling_map,
@@ -406,22 +457,27 @@ class QNNModel(QMLModel, abc.ABC):
                 computational basis of given circuit.
             """
 
+            # TODO(TR): REFACTOR!
+            embedding_inputs: torch.Tensor = inputs
             if isinstance(inputs, torch.Tensor):
-                inputs = self._prepare_torch_inputs(inputs)
+                # For now: Padding for AmplitudeEmbedding
+                # For some reason this is not needed in the QEK...
+                embedding_inputs = self._prepare_torch_inputs(inputs)
 
-            with qml.QueuingManager.stop_recording():
-                ops = qml.tape.QuantumScript(
-                    self._embedding_method(
-                        inputs, **self._embedding_kwargs
-                    ).decomposition()
-                )
-
-            for op in ops:
-                qml.apply(op)
+            # Initial data uploading
+            self.upload_data(
+                embedding_inputs, self._embedding_method, self._embedding_kwargs
+            )
 
             start_weights: int = 0
 
             for i, layer in enumerate(self._layers):
+                # Add next data reuploading
+                self.upload_data(
+                    inputs, self._reuploaders[i], self._reuploaders_kwargs[i]
+                )
+
+                # Add next layer
                 layer_shape: Tuple[int, ...] = layer.shape(
                     n_layers=1, n_wires=len(self.wires)
                 )
@@ -442,6 +498,7 @@ class QNNModel(QMLModel, abc.ABC):
                 for op in ops:
                     qml.apply(op)
 
+            # TODO(TR): This we have to be able to define.
             return [qml.expval(qml.PauliZ((i))) for i in self.wires]
 
         if self.coupling_map:
@@ -644,7 +701,7 @@ class QNNModel(QMLModel, abc.ABC):
         handles this preprocessing.
 
         :param inputs:
-            Inputs given by the
+            Inputs given by the TODO(TR)
         :return:
             Preprocessed inputs.
         """
@@ -814,6 +871,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         embedding_method: Optional[Type[qml.operation.Operation]] = None,
         embedding_kwargs: Optional[Dict[str, Any]] = None,
         layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
+        reuploaders: Optional[Sequence[None | Type[qml.operation.Operation]]] = None,
+        reuploaders_kwargs: Optional[Sequence[Dict[str, Any]]] = None,
         initial_weights: Optional[Sequence[float]] = None,
         rng_seed: int = 42,
         accuracy_threshold: float = 0.8,
@@ -823,6 +882,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
     ) -> None:
         """
         A constructor for the `QuantumKernelBinaryClassifier` class.
+
+        TODO(TR): Add reuploaders to the docstring
 
         :param wires:
             The wires to use in the VQC or the number of qubits (and wires) used in the
@@ -868,6 +929,8 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             embedding_method=embedding_method,
             embedding_kwargs=embedding_kwargs,
             layers=layers,
+            reuploaders=reuploaders,
+            reuploaders_kwargs=reuploaders_kwargs,
             validation_set_size=validation_set_size,
             rng_seed=rng_seed,
             coupling_map=coupling_map,
@@ -920,17 +983,16 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         start_weights: int = 0
 
-        for layer in self._layers:
-            with qml.QueuingManager.stop_recording():
-                ops = qml.tape.QuantumScript(
-                    self._embedding_method(
-                        features, **self._embedding_kwargs
-                    ).decomposition()
-                )
+        # Initial data upload.
+        self.upload_data(features, self._embedding_method, self._embedding_kwargs)
 
-            for op in ops:
-                qml.apply(op)
-
+        for i, layer in enumerate(self._layers):
+            assert i >= 0
+            # self.upload_data(features, self._embedding_method, self._embedding_kwargs)
+            self.upload_data(
+                features, self._reuploaders[i], self._reuploaders_kwargs[i]
+            )
+            # TODO(TR): Initially we had data uploading in the loop. Why? For reuploading?
             layer_shape: Tuple[int, ...] = layer.shape(
                 n_layers=1, n_wires=len(self.wires)
             )

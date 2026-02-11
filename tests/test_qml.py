@@ -34,7 +34,7 @@ __author__ = "Tomasz Rybotycki"
 import abc
 import os
 import unittest
-from typing import List, Sequence, Tuple, Type, Union
+from typing import List, Sequence, Tuple, Type, Union, Any
 
 import dill
 import lightning.pytorch.utilities.seed
@@ -48,7 +48,7 @@ from numpy.typing import NDArray
 from pennylane import numpy as np
 from pennylane.measurements import ExpectationMP
 from pennylane.operation import Operation
-from pennylane.templates import StronglyEntanglingLayers
+from pennylane.templates import StronglyEntanglingLayers, AngleEmbedding
 from sklearn.datasets import (
     load_digits,
     make_classification,
@@ -405,15 +405,21 @@ class TestQEKBinaryClassifier(unittest.TestCase):
             "lightning.qubit", wires=self.n_qubits
         )
 
+        n_layers: int = 3
         layers: List[Type[Operation]] = [
             StronglyEntanglingLayers
-        ] * 3  # 3 StronglyEntanglingLayers
+        ] * n_layers  # 3 StronglyEntanglingLayers
+
+        reuploaders: list[Type[Operation]] = [None] + [AngleEmbedding] * (n_layers - 1)
+        reuploaders_kwargs: list[dict[str, Any]] = [
+            {"wires": range(self.n_qubits), "rotation": "X"}
+        ] * n_layers
 
         self.weights_length: int = 18
 
         alternate_layers: List[Type[Operation]] = [
             qml.templates.BasicEntanglerLayers
-        ] * 3
+        ] * n_layers
 
         self.n_epochs: int = 1
 
@@ -422,6 +428,8 @@ class TestQEKBinaryClassifier(unittest.TestCase):
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
             layers=layers,
+            reuploaders=reuploaders,
+            reuploaders_kwargs=reuploaders_kwargs,
             device=self.dev,
         )
 
@@ -431,6 +439,8 @@ class TestQEKBinaryClassifier(unittest.TestCase):
                 n_epochs=self.n_epochs,
                 accuracy_threshold=accuracy_threshold,
                 layers=alternate_layers,
+                reuploaders=reuploaders,
+                reuploaders_kwargs=reuploaders_kwargs,
                 device=self.dev,
             )
         )
