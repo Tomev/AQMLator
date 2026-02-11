@@ -4,8 +4,6 @@ quick_tests.py
 __pycache__
 .tox
 aqmlator.egg-info
-aqmlator/database_connection.py
-aqmlator/ibmq_connection.py
 *sql
 *db
 *_build*
@@ -13,3 +11,4 @@ aqmlator/ibmq_connection.py
 docs/build/
 dist/
 .vscode/*
+.coverage

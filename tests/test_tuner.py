@@ -48,6 +48,10 @@ from sklearn.datasets import (
 from aqmlator.qml import QNNBinaryClassifier
 from aqmlator.tuner import HyperparameterTuner, MLTaskType, ModelFinder
 
+import optuna
+
+optuna.logging.set_verbosity(optuna.logging.WARNING)
+
 
 class TestModelFinder(unittest.TestCase):
     """

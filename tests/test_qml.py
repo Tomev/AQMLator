@@ -34,13 +34,12 @@ __author__ = "Tomasz Rybotycki"
 import abc
 import os
 import unittest
-from typing import List, Optional, Sequence, Tuple, Type, Union
+from typing import List, Sequence, Tuple, Type, Union
 
 import dill
 import lightning.pytorch.utilities.seed
 import pennylane as qml
 import torch
-import warnings
 from dwave.samplers import RandomSampler
 from lightning.pytorch.utilities import disable_possible_user_warnings
 from numpy import isclose
@@ -50,7 +49,6 @@ from pennylane import numpy as np
 from pennylane.measurements import ExpectationMP
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
-from qiskit_ibm_runtime import QiskitRuntimeService
 from sklearn.datasets import (
     load_digits,
     make_classification,
@@ -71,183 +69,192 @@ from aqmlator.qml import (
 )
 
 
-class TestQNNModel(unittest.TestCase, abc.ABC):
-    """
-    A general `unittest.TestCase` class for QNN based QML models.
-    """
+class QNNCommons:
+    """A class for hodling :class:`TestCase` abstract or base subclasses, that should
+    not be called. This allows avoiding tests skips in in the ``coverage`` reports."""
 
-    x: Sequence[Sequence[float]]
-    y: Union[List[int], List[float]]
-
-    model: QNNModel
-    alternate_model: QNNModel
-    dev: qml.devices.Device
-
-    def setUp(self) -> None:
+    class TestQNNModel(unittest.TestCase, abc.ABC):
         """
-        Setup method for the `TestCase`. Should be overwritten by test classes.
+        A general `unittest.TestCase` class for QNN based QML models.
+        """
 
-        :note:
-            TR: This is by default called before any test. One way to skip the test of this
-            class if to set the skipping in the setUp. There may be a better way to do
-            it though.
-        """
-        raise unittest.SkipTest("Skipping tests for abstract QNNModel class.")
+        x: Sequence[Sequence[float]]
+        y: Union[List[int], List[float]]
 
-    def tearDown(self) -> None:
-        if os.path.isfile("qml_test.dil"):
-            os.remove("qml_test.dil")
+        model: QNNModel
+        alternate_model: QNNModel
+        dev: qml.devices.Device
 
-    @staticmethod
-    def get_weights(model: torch.nn.Module) -> List[np.ndarray]:
-        """
-        Extract the weights from the given model.
+        def setUp(self) -> None:
+            """
+            Setup method for the `TestCase`. Should be overwritten by test classes.
 
-        :param model:
-            The model to extract the weights from.
+            :note:
+                TR: This is by default called before any test. One way to skip the test of this
+                class if to set the skipping in the setUp. There may be a better way to do
+                it though.
+            """
+            raise unittest.SkipTest("Skipping tests for abstract QNNModel class.")
 
-        :return:
-            The current weights of the model.
-        """
-        weights: List[np.ndarray] = []
+        def tearDown(self) -> None:
+            if os.path.isfile("qml_test.dil"):
+                os.remove("qml_test.dil")
 
-        for _, param in model.named_parameters():
-            weights.append(np.array(param.detach().numpy()))
+        @staticmethod
+        def get_weights(model: torch.nn.Module) -> List[np.ndarray]:
+            """
+            Extract the weights from the given model.
 
-        return weights
+            :param model:
+                The model to extract the weights from.
 
-    def test_predict_run(self) -> None:
-        """
-        Tests if making predictions is possible.
-        """
-        self.model.predict(self.x)
+            :return:
+                The current weights of the model.
+            """
+            weights: List[np.ndarray] = []
 
-    def test_fit_run(self) -> None:
-        """
-        Tests if the learning runs smoothly.
-        """
-        self.model.fit(self.x, self.y)
+            for _, param in model.named_parameters():
+                weights.append(np.array(param.detach().numpy()))
 
-    def test_accuracy_increase(self) -> None:
-        """
-        Tests if the accuracy increases after short training.
-        """
-        initial_score: float = self.model.score(self.x, self.y)
-        self.model.fit(self.x, self.y)
-        final_score: float = self.model.score(self.x, self.y)
-        self.assertTrue(
-            final_score > initial_score,
-            f"QNN Training: Initial score ({initial_score}) isn't worse than the final"
-            f" score ({final_score})!",
-        )
+            return weights
 
-    def test_weights_change(self) -> None:
-        """
-        Tests if the weights change during the training.
-        """
-        initial_weights: Sequence[float] = self.model.weights
-        self.model.fit(self.x, self.y)
-
-        self.assertTrue(
-            tuple(initial_weights) != tuple(self.model.weights),
-            "Weights didn't change during the training!",
-        )
-
-    def test_results_dimensions(self) -> None:
-        """
-        Tests if the predictions have expected dimensions.
-        """
-        predictions: np.ndarray = self.model.predict(self.x)
-        self.assertTrue(
-            len(predictions) == len(self.x),
-            f"Result dimensions are unexpected!({len(predictions)} != {len(self.x)}).",
-        )
-
-    def test_executions_number_growth(self) -> None:
-        """
-        Tests if the number of executions grows when the model is executed.
-        """
-        with qml.Tracker(self.dev) as tracker:
+        def test_predict_run(self) -> None:
+            """
+            Tests if making predictions is possible.
+            """
             self.model.predict(self.x)
 
-        self.assertTrue(
-            tracker.totals["executions"] > 0, "The number of executions don't grow!"
-        )
+        def test_fit_run(self) -> None:
+            """
+            Tests if the learning runs smoothly.
+            """
+            self.model.fit(self.x, self.y)
 
-    def test_different_layers_predict_run(self) -> None:
-        """
-        Tests if making predictions is possible when different type of layers is used.
-        """
-        self.alternate_model.predict(self.x)
+        def test_accuracy_increase(self) -> None:
+            """
+            Tests if the accuracy increases after short training.
+            """
+            initial_score: float = self.model.score(self.x, self.y)
+            self.model.fit(self.x, self.y)
+            final_score: float = self.model.score(self.x, self.y)
+            self.assertTrue(
+                final_score > initial_score,
+                f"QNN Training: Initial score ({initial_score}) isn't worse than the final"
+                f" score ({final_score})!",
+            )
 
-    def test_initial_serialization(self) -> None:
-        """
-        Tests if the model is serializable after the initialization.
+        def test_weights_change(self) -> None:
+            """
+            Tests if the weights change during the training.
+            """
+            initial_weights: Sequence[float] = self.model.weights
+            self.model.fit(self.x, self.y)
 
-        :note:
-            This method can be (and is) used to check if the modified model is
-            serializable.
-        """
+            self.assertTrue(
+                tuple(initial_weights) != tuple(self.model.weights),
+                "Weights didn't change during the training!",
+            )
 
-        model_score: float = self.model.score(self.x, self.y)
+        def test_results_dimensions(self) -> None:
+            """
+            Tests if the predictions have expected dimensions.
+            """
+            predictions: np.ndarray = self.model.predict(self.x)
+            self.assertTrue(
+                len(predictions) == len(self.x),
+                f"Result dimensions are unexpected!({len(predictions)} != {len(self.x)}).",
+            )
 
-        # It seems that we cannot serialize pennylane device
-        self.model.dev = None
+        def test_executions_number_growth(self) -> None:
+            """
+            Tests if the number of executions grows when the model is executed.
+            """
+            with qml.Tracker(self.dev) as tracker:
+                self.model.predict(self.x)
 
-        with open("qml_test.dil", "wb") as f:
-            dill.dump(self.model, f)
+            self.assertTrue(
+                tracker.totals["executions"] > 0, "The number of executions don't grow!"
+            )
 
-        with open("qml_test.dil", "rb") as f:
-            loaded_model: QNNModel = dill.load(f)
+        def test_different_layers_predict_run(self) -> None:
+            """
+            Tests if making predictions is possible when different type of layers is used.
+            """
+            self.alternate_model.predict(self.x)
 
-        loaded_model.dev = self.dev
+        def test_initial_serialization(self) -> None:
+            """
+            Tests if the model is serializable after the initialization.
 
-        self.assertTrue(isclose(model_score, loaded_model.score(self.x, self.y)))
+            :note:
+                This method can be (and is) used to check if the modified model is
+                serializable.
+            """
 
-    def test_post_fit_serialization(self) -> None:
-        """
-        Tests if the model is serializable after fit.
-        """
-        self.model.fit(self.x, self.y)
-        self.test_initial_serialization()
+            model_score: float = self.model.score(self.x, self.y)
 
-    def test_post_prediction_serialization(self) -> None:
-        """
-        Tests if the model is serializable after making prediction.
-        """
-        self.model.predict(self.x)
-        self.test_initial_serialization()
+            # It seems that we cannot serialize pennylane device
+            self.model.dev = None
 
-    def test_torch_forward_run(self) -> None:
-        """
-        Tests if making predictions with torch classifier is possible.
-        """
-        model: torch.nn.Sequential = torch.nn.Sequential(self.model.get_torch_layer())
-        model.forward(torch.tensor(self.x))
+            with open("qml_test.dil", "wb") as f:
+                dill.dump(self.model, f)
 
-    def test_torch_results_dimension(self) -> None:
-        """
-        Tests if torch predictions have expected dimensions.
-        """
-        model: torch.nn.Sequential = torch.nn.Sequential(self.model.get_torch_layer())
-        predictions: torch.Tensor = model.forward(torch.tensor(self.x))
+            with open("qml_test.dil", "rb") as f:
+                loaded_model: QNNModel = dill.load(f)
 
-        self.assertTrue(
-            len(predictions) == len(self.x), "Torch predictions have unexpected shape."
-        )
+            loaded_model.dev = self.dev
 
-    def test_torch_different_layers_forward_run(self) -> None:
-        """
-        Tests if making predictions with torch is possible when different type of layers
-        is used.
-        """
-        model: torch.nn.Sequential = torch.nn.Sequential(
-            self.alternate_model.get_torch_layer()
-        )
-        model.forward(torch.tensor(self.x))
+            self.assertTrue(isclose(model_score, loaded_model.score(self.x, self.y)))
+
+        def test_post_fit_serialization(self) -> None:
+            """
+            Tests if the model is serializable after fit.
+            """
+            self.model.fit(self.x, self.y)
+            self.test_initial_serialization()
+
+        def test_post_prediction_serialization(self) -> None:
+            """
+            Tests if the model is serializable after making prediction.
+            """
+            self.model.predict(self.x)
+            self.test_initial_serialization()
+
+        def test_torch_forward_run(self) -> None:
+            """
+            Tests if making predictions with torch classifier is possible.
+            """
+            model: torch.nn.Sequential = torch.nn.Sequential(
+                self.model.get_torch_layer()
+            )
+            model.forward(torch.tensor(self.x))
+
+        def test_torch_results_dimension(self) -> None:
+            """
+            Tests if torch predictions have expected dimensions.
+            """
+            model: torch.nn.Sequential = torch.nn.Sequential(
+                self.model.get_torch_layer()
+            )
+            predictions: torch.Tensor = model.forward(torch.tensor(self.x))
+
+            self.assertTrue(
+                len(predictions) == len(self.x),
+                "Torch predictions have unexpected shape.",
+            )
+
+        def test_torch_different_layers_forward_run(self) -> None:
+            """
+            Tests if making predictions with torch is possible when different type of layers
+            is used.
+            """
+            model: torch.nn.Sequential = torch.nn.Sequential(
+                self.alternate_model.get_torch_layer()
+            )
+            model.forward(torch.tensor(self.x))
 
 
-class TestQNNBinaryClassifier(TestQNNModel):
+class TestQNNBinaryClassifier(QNNCommons.TestQNNModel):
     """
     A `TestCase` class for the QNN-based binary classifier.
     """
@@ -308,7 +315,7 @@ class TestQNNBinaryClassifier(TestQNNModel):
         )
 
 
-class TestQNNLinearRegressor(TestQNNModel):
+class TestQNNLinearRegressor(QNNCommons.TestQNNModel):
     """
     A `TestCase` class for the QNN-based linear regressor.
     """
@@ -682,250 +689,6 @@ class TestQuantumClassifier(unittest.TestCase):
         """
         self.classifier.predict(self.X)
         self.test_initial_serialization()
-
-
-# TODO TR: Think of a less general case for this class.
-class TestIBMQDevicesHandling(unittest.TestCase):
-    """
-    A class for testing if the qml models work as intended on IBM devices.
-    """
-
-    def setUp(self) -> None:
-        """
-        Sets up the tests. Called before every test.
-        """
-        # TR: In case Qiskit and PennyLane versions are compatible. Latest aren't.
-        # warnings.filterwarnings("ignore", category=DeprecationWarning)
-        warnings.filterwarnings("ignore")
-
-        n_samples: int = 50
-        seed: int = 0
-
-        self.n_features: int = 3
-        self.n_classes: int = 2
-        self.noise: float = 0.1
-        self.batch_size: int = n_samples // 5
-        self.n_epochs: int = 1
-        self.accuracy_threshold: float = 0.8
-
-        self.class_X: Sequence[Sequence[float]]
-        self.class_y: Sequence[int]
-
-        self.class_X, self.class_y = make_classification(
-            n_samples=n_samples,
-            n_features=self.n_features,
-            n_classes=self.n_classes,
-            n_redundant=0,
-            n_clusters_per_class=1,
-            random_state=RandomState(seed),
-        )
-
-        self.regression_X: Sequence[Sequence[float]]
-        self.regression_y: Sequence[float]
-
-        (  # pylint: disable=unbalanced-tuple-unpacking
-            self.regression_X,
-            self.regression_y,
-        ) = make_regression(
-            n_samples=n_samples,
-            n_features=self.n_features,
-            shuffle=True,
-            noise=self.noise,
-            random_state=RandomState(seed),
-        )
-
-        service = QiskitRuntimeService(
-            channel="ibm_quantum_platform",
-            token=os.environ["IBMQ_TOKEN"],
-            instance=os.environ["IBMQ_CRN"],
-        )
-
-        backends = service.backends()
-
-        for i in range(len(backends)):
-            if (
-                "simulator" in str(backends[i]).lower()
-                or backends[i].configuration().n_qubits < 3
-            ):
-                continue
-            backend = backends[i]
-            self.n_qubits: int = backend.configuration().n_qubits
-            break
-
-        config = backend.configuration()
-
-        self.coupling_map: List[Sequence[int]] = config.coupling_map
-
-        self.dev: qml.devices.Device = qml.device(
-            "qiskit.aer",
-            wires=self.n_features,
-        )
-
-        self.coupled_dev = qml.device(
-            "qiskit.aer",
-            wires=self.n_features,
-            coupling_map=self.coupling_map,
-            basis_gates=config.to_dict()[
-                "basis_gates"
-            ],  # To remove the issue of 3-qubit gates in qiskit.aer basis_gates
-        )
-
-        self.layers: List[Type[Operation]] = [
-            StronglyEntanglingLayers
-        ] * 3  # 3 StronglyEntanglingLayers
-
-    def _proceed_with_qek_classifier_test(
-        self,
-        coupling_map: Optional[List[Sequence[int]]] = None,
-        dev: Optional[qml.devices.Device] = None,
-    ) -> None:
-        """
-        A common part of all the QEK Classifier-related tests. Test is passed if the
-        fitting don't crash.
-
-        :param coupling_map:
-            A coupling map to be applied when applying the VQC.
-        :param dev:
-            A device to run the VQC on.
-        """
-        if not dev:
-            dev = self.dev
-
-        qek_classifier: QuantumKernelBinaryClassifier = QuantumKernelBinaryClassifier(
-            wires=self.n_features,
-            n_epochs=self.n_epochs,
-            accuracy_threshold=self.accuracy_threshold,
-            layers=self.layers,
-            device=dev,
-            coupling_map=coupling_map,
-        )
-        qek_classifier.fit(self.class_X, self.class_y)
-
-    def _proceed_with_qnn_regressor_test(
-        self,
-        coupling_map: Optional[List[Sequence[int]]] = None,
-        dev: Optional[qml.devices.Device] = None,
-    ) -> None:
-        """
-        A common part of all the QNN Regressor-related tests. Test is passed if the
-        fitting don't crash.
-
-        :param coupling_map:
-            A coupling map to be applied when applying the VQC.
-        :param dev:
-            A device to run the VQC on.
-        """
-        if not dev:
-            dev = self.dev
-
-        qnn_regressor: QNNLinearRegression = QNNLinearRegression(
-            wires=self.n_features,
-            batch_size=self.batch_size,
-            n_epochs=self.n_epochs,
-            accuracy_threshold=self.accuracy_threshold,
-            layers=self.layers,
-            device=dev,
-            coupling_map=coupling_map,
-        )
-        qnn_regressor.fit(self.regression_X, self.regression_y)
-
-    def _proceed_wth_qnn_classifier_test(
-        self,
-        coupling_map: Optional[List[Sequence[int]]] = None,
-        dev: Optional[qml.devices.Device] = None,
-    ) -> None:
-        """
-        A common part of all the QNN Classifier-related tests. Test is passed if the
-        fitting don't crash.
-
-        :param coupling_map:
-            A coupling map to be applied when applying the VQC.
-        :param dev:
-            A device to run the VQC on.
-        """
-        if not dev:
-            dev = self.dev
-
-        qnn_classifier: QNNBinaryClassifier = QNNBinaryClassifier(
-            wires=self.n_features,
-            batch_size=self.batch_size,
-            n_epochs=self.n_epochs,
-            accuracy_threshold=self.accuracy_threshold,
-            layers=self.layers,
-            device=dev,
-            coupling_map=coupling_map,
-        )
-
-        qnn_classifier.fit(self.class_X, self.class_y)
-
-    def test_qek_classifier_on_qiskit_simulator(self) -> None:
-        """
-        Tests if the QEK classifier works correctly on the unconstrained IBMQ device
-        simulator.
-        """
-        self._proceed_with_qek_classifier_test()
-
-    def test_qnn_classifier_on_qiskit_simulator(self) -> None:
-        """
-        Tests if the QNN classifier works correctly on the unconstrained IBMQ device
-        simulator.
-        """
-        self._proceed_wth_qnn_classifier_test()
-
-    def test_qnn_regressor_on_qiskit_simulator(self) -> None:
-        """
-        Tests if the QNN regressor works correctly on the unconstrained IBMQ device
-        simulator.
-        """
-        self._proceed_with_qnn_regressor_test()
-
-    def test_qek_classifier_with_coupling(self) -> None:
-        """
-        Tests if the QEK classifier works correctly with the coupling map applied
-        on the unconstrained IBMQ device simulator.
-        """
-        self._proceed_with_qek_classifier_test(self.coupling_map)
-
-    def test_qnn_classifier_with_coupling(self) -> None:
-        """
-        Tests if the QNN classifier works correctly with the coupling map applied
-        on the unconstrained IBMQ device simulator.
-        """
-        self._proceed_wth_qnn_classifier_test(self.coupling_map)
-
-    def test_qnn_regressor_with_coupling(self) -> None:
-        """
-        Tests if the QNN regressor works correctly with the coupling map applied
-        on the unconstrained IBMQ device simulator.
-        """
-        self._proceed_with_qnn_regressor_test(self.coupling_map)
-
-    def test_qnn_classifier_on_coupled_device(self) -> None:
-        """
-        Tests if the QNN classifier works correctly with the coupling map applied
-        on the real IBMQ device simulator.
-        """
-        self._proceed_wth_qnn_classifier_test(
-            dev=self.coupled_dev, coupling_map=self.coupling_map
-        )
-
-    def test_qnn_regressor_on_coupled_device(self) -> None:
-        """
-        Tests if the QNN regressor works correctly with the coupling map applied
-        on the real IBMQ device simulator.
-        """
-        self._proceed_with_qnn_regressor_test(
-            dev=self.coupled_dev, coupling_map=self.coupling_map
-        )
-
-    def test_qek_classifier_on_coupled_device(self) -> None:
-        """
-        Tests if the QNN classifier works correctly with the coupling map applied
-        on the real IBMQ device simulator.
-        """
-        self._proceed_with_qek_classifier_test(
-            dev=self.coupled_dev, coupling_map=self.coupling_map
-        )
 
 
 class TestRBMClustering(unittest.TestCase):
