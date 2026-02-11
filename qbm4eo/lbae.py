@@ -86,9 +86,7 @@ class LBAE(LightningModule):
 
         self.reference_image: Tensor = Tensor()
 
-        self.save_hyperparameters(
-            "input_size", "out_channels", "latent_space_size", "num_layers", "quantize"
-        )
+        self.save_hyperparameters("input_size", "out_channels", "latent_space_size", "num_layers", "quantize")
 
         self.encoder: LBAEEncoder = LBAEEncoder(
             input_size=input_size,

@@ -52,9 +52,7 @@ class ResBlockDeConvPart(nn.Module):
 
         self.subnet: nn.Sequential = nn.Sequential(
             nn.LeakyReLU(negative_slope),
-            nn.ConvTranspose2d(
-                channels, channels, kernel_size=3, stride=1, padding=1, bias=bias
-            ),
+            nn.ConvTranspose2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=bias),
             nn.BatchNorm2d(channels),
         )
 

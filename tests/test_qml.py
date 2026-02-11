@@ -139,8 +139,7 @@ class QNNCommons:
             final_score: float = self.model.score(self.x, self.y)
             self.assertTrue(
                 final_score > initial_score,
-                f"QNN Training: Initial score ({initial_score}) isn't worse than the final"
-                f" score ({final_score})!",
+                f"QNN Training: Initial score ({initial_score}) isn't worse than the final score ({final_score})!",
             )
 
         def test_weights_change(self) -> None:
@@ -172,9 +171,7 @@ class QNNCommons:
             with qml.Tracker(self.dev) as tracker:
                 self.model.predict(self.x)
 
-            self.assertTrue(
-                tracker.totals["executions"] > 0, "The number of executions don't grow!"
-            )
+            self.assertTrue(tracker.totals["executions"] > 0, "The number of executions don't grow!")
 
         def test_different_layers_predict_run(self) -> None:
             """
@@ -224,18 +221,14 @@ class QNNCommons:
             """
             Tests if making predictions with torch classifier is possible.
             """
-            model: torch.nn.Sequential = torch.nn.Sequential(
-                self.model.get_torch_layer()
-            )
+            model: torch.nn.Sequential = torch.nn.Sequential(self.model.get_torch_layer())
             model.forward(torch.tensor(self.x))
 
         def test_torch_results_dimension(self) -> None:
             """
             Tests if torch predictions have expected dimensions.
             """
-            model: torch.nn.Sequential = torch.nn.Sequential(
-                self.model.get_torch_layer()
-            )
+            model: torch.nn.Sequential = torch.nn.Sequential(self.model.get_torch_layer())
             predictions: torch.Tensor = model.forward(torch.tensor(self.x))
 
             self.assertTrue(
@@ -248,9 +241,7 @@ class QNNCommons:
             Tests if making predictions with torch is possible when different type of layers
             is used.
             """
-            model: torch.nn.Sequential = torch.nn.Sequential(
-                self.alternate_model.get_torch_layer()
-            )
+            model: torch.nn.Sequential = torch.nn.Sequential(self.alternate_model.get_torch_layer())
             model.forward(torch.tensor(self.x))
 
 
@@ -285,13 +276,9 @@ class TestQNNBinaryClassifier(QNNCommons.TestQNNModel):
 
         self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
-        layers: List[Type[Operation]] = [
-            StronglyEntanglingLayers
-        ] * 3  # 3 StronglyEntanglingLayers
+        layers: List[Type[Operation]] = [StronglyEntanglingLayers] * 3  # 3 StronglyEntanglingLayers
 
-        alternate_layers: List[Type[Operation]] = [
-            qml.templates.BasicEntanglerLayers
-        ] * 2
+        alternate_layers: List[Type[Operation]] = [qml.templates.BasicEntanglerLayers] * 2
 
         self.n_epochs: int = 2
         batch_size: int = 20
@@ -342,13 +329,9 @@ class TestQNNLinearRegressor(QNNCommons.TestQNNModel):
         n_qubits: int = 2
         self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=n_qubits)
 
-        layers: List[Type[Operation]] = [
-            StronglyEntanglingLayers
-        ] * 3  # 3 StronglyEntanglingLayers
+        layers: List[Type[Operation]] = [StronglyEntanglingLayers] * 3  # 3 StronglyEntanglingLayers
 
-        alternate_layers: List[Type[Operation]] = [
-            qml.templates.BasicEntanglerLayers
-        ] * 2
+        alternate_layers: List[Type[Operation]] = [qml.templates.BasicEntanglerLayers] * 2
 
         self.n_epochs: int = 3
         batch_size: int = 20
@@ -401,25 +384,17 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.n_qubits: int = 2
 
-        self.dev: qml.devices.Device = qml.device(
-            "lightning.qubit", wires=self.n_qubits
-        )
+        self.dev: qml.devices.Device = qml.device("lightning.qubit", wires=self.n_qubits)
 
         n_layers: int = 3
-        layers: List[Type[Operation]] = [
-            StronglyEntanglingLayers
-        ] * n_layers  # 3 StronglyEntanglingLayers
+        layers: List[Type[Operation]] = [StronglyEntanglingLayers] * n_layers  # 3 StronglyEntanglingLayers
 
         reuploaders: list[Type[Operation]] = [None] + [AngleEmbedding] * (n_layers - 1)
-        reuploaders_kwargs: list[dict[str, Any]] = [
-            {"wires": range(self.n_qubits), "rotation": "X"}
-        ] * n_layers
+        reuploaders_kwargs: list[dict[str, Any]] = [{"wires": range(self.n_qubits), "rotation": "X"}] * n_layers
 
         self.weights_length: int = 18
 
-        alternate_layers: List[Type[Operation]] = [
-            qml.templates.BasicEntanglerLayers
-        ] * n_layers
+        alternate_layers: List[Type[Operation]] = [qml.templates.BasicEntanglerLayers] * n_layers
 
         self.n_epochs: int = 1
 
@@ -433,16 +408,14 @@ class TestQEKBinaryClassifier(unittest.TestCase):
             device=self.dev,
         )
 
-        self.alternate_classifier: QuantumKernelBinaryClassifier = (
-            QuantumKernelBinaryClassifier(
-                wires=self.n_qubits,
-                n_epochs=self.n_epochs,
-                accuracy_threshold=accuracy_threshold,
-                layers=alternate_layers,
-                reuploaders=reuploaders,
-                reuploaders_kwargs=reuploaders_kwargs,
-                device=self.dev,
-            )
+        self.alternate_classifier: QuantumKernelBinaryClassifier = QuantumKernelBinaryClassifier(
+            wires=self.n_qubits,
+            n_epochs=self.n_epochs,
+            accuracy_threshold=accuracy_threshold,
+            layers=alternate_layers,
+            reuploaders=reuploaders,
+            reuploaders_kwargs=reuploaders_kwargs,
+            device=self.dev,
         )
 
     def tearDown(self) -> None:
@@ -469,8 +442,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
 
         self.assertTrue(
             initial_accuracy < accuracy,
-            f"Initial accuracy ({initial_accuracy}) didn't increase ({accuracy}) after "
-            f"training.",
+            f"Initial accuracy ({initial_accuracy}) didn't increase ({accuracy}) after training.",
         )
 
     def test_weights_change(self) -> None:
@@ -504,9 +476,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
             self.classifier.fit(self.x, self.y)
             self.classifier.predict(self.x)
 
-        self.assertTrue(
-            tracker.totals["executions"] > 0, "The number of executions don't grow!"
-        )
+        self.assertTrue(tracker.totals["executions"] > 0, "The number of executions don't grow!")
 
     def test_different_layers_learning_and_predict_run(
         self,
@@ -539,8 +509,7 @@ class TestQEKBinaryClassifier(unittest.TestCase):
         for x in mapped_x:
             self.assertTrue(
                 len(np.array(x)) == self.n_qubits,
-                f"Dimension of the results_reconstruction is incorrect! ({len(np.array(x))} !="
-                f" {self.n_qubits})",
+                f"Dimension of the results_reconstruction is incorrect! ({len(np.array(x))} != {self.n_qubits})",
             )
 
     def _test_serialization(self) -> None:
@@ -656,13 +625,9 @@ class TestQuantumClassifier(unittest.TestCase):
         """
         Tests if the classifier accuracy increase after the training.
         """
-        initial_accuracy: float = np.mean(
-            [int(i == j) for i, j in zip(self.y, self.classifier.predict(self.X))]
-        )
+        initial_accuracy: float = np.mean([int(i == j) for i, j in zip(self.y, self.classifier.predict(self.X))])
         self.classifier.fit(self.X, self.y)
-        final_accuracy: float = np.mean(
-            [int(i == j) for i, j in zip(self.classifier.predict(self.X), self.y)]
-        )
+        final_accuracy: float = np.mean([int(i == j) for i, j in zip(self.classifier.predict(self.X), self.y)])
         self.assertTrue(initial_accuracy < final_accuracy)
 
     def test_initial_serialization(self) -> None:
@@ -710,9 +675,7 @@ class TestRBMClustering(unittest.TestCase):
         """
         Sets up the test case.
         """
-        lightning.pytorch.seed_everything(
-            42, workers=True, verbose=False
-        )  # Fix the seed.
+        lightning.pytorch.seed_everything(42, workers=True, verbose=False)  # Fix the seed.
 
         lbae_input_size: Tuple[int, ...] = (1, 1, 8, 8)
         lbae_out_channels: int = 8
@@ -811,9 +774,7 @@ class TestRBMClustering(unittest.TestCase):
             return sum(p * 2**i for i, p in enumerate(t))
 
         for x in self.X_tensor:
-            predictions.append(
-                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8))[0])
-            )
+            predictions.append(simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8))[0]))
 
         initial_score: float = rand_score(self.y, predictions)
 
@@ -822,9 +783,7 @@ class TestRBMClustering(unittest.TestCase):
         self.rbm_clustering.fit(self.data_loader)
 
         for x in self.X_tensor:
-            predictions.append(
-                simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8))[0])
-            )
+            predictions.append(simple_hash(self.rbm_clustering.predict(x.view(1, 1, 8, 8))[0]))
 
         final_score: float = rand_score(self.y, predictions)
 

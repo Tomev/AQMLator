@@ -84,10 +84,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
         backends = service.backends()
 
         for i in range(len(backends)):
-            if (
-                "simulator" in str(backends[i]).lower()
-                or backends[i].configuration().n_qubits < 3
-            ):
+            if "simulator" in str(backends[i]).lower() or backends[i].configuration().n_qubits < 3:
                 continue
             backend = backends[i]
             self.n_qubits: int = backend.configuration().n_qubits
@@ -111,9 +108,7 @@ class TestIBMQDevicesHandling(unittest.TestCase):
             ],  # To remove the issue of 3-qubit gates in qiskit.aer basis_gates
         )
 
-        self.layers: List[Type[Operation]] = [
-            StronglyEntanglingLayers
-        ] * 3  # 3 StronglyEntanglingLayers
+        self.layers: List[Type[Operation]] = [StronglyEntanglingLayers] * 3  # 3 StronglyEntanglingLayers
 
     def _proceed_with_qek_classifier_test(
         self,
@@ -246,24 +241,18 @@ class TestIBMQDevicesHandling(unittest.TestCase):
         Tests if the QNN classifier works correctly with the coupling map applied
         on the real IBMQ device simulator.
         """
-        self._proceed_wth_qnn_classifier_test(
-            dev=self.coupled_dev, coupling_map=self.coupling_map
-        )
+        self._proceed_wth_qnn_classifier_test(dev=self.coupled_dev, coupling_map=self.coupling_map)
 
     def test_qnn_regressor_on_coupled_device(self) -> None:
         """
         Tests if the QNN regressor works correctly with the coupling map applied
         on the real IBMQ device simulator.
         """
-        self._proceed_with_qnn_regressor_test(
-            dev=self.coupled_dev, coupling_map=self.coupling_map
-        )
+        self._proceed_with_qnn_regressor_test(dev=self.coupled_dev, coupling_map=self.coupling_map)
 
     def test_qek_classifier_on_coupled_device(self) -> None:
         """
         Tests if the QNN classifier works correctly with the coupling map applied
         on the real IBMQ device simulator.
         """
-        self._proceed_with_qek_classifier_test(
-            dev=self.coupled_dev, coupling_map=self.coupling_map
-        )
+        self._proceed_with_qek_classifier_test(dev=self.coupled_dev, coupling_map=self.coupling_map)

@@ -104,9 +104,7 @@ class ResBlockConvPart(nn.Module):
         super().__init__(*args, **kwargs)
         self.subnet: nn.Sequential = nn.Sequential(
             nn.LeakyReLU(negative_slope),
-            nn.Conv2d(
-                channels, channels, kernel_size=3, stride=1, padding=1, bias=bias
-            ),
+            nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=bias),
             nn.BatchNorm2d(channels),
         )
 
@@ -156,9 +154,7 @@ class ResBlockConv(nn.Module):
             in_channels = channels
 
         self.initial_block: nn.Sequential = nn.Sequential(
-            nn.Conv2d(
-                in_channels, channels, kernel_size=4, stride=2, padding=1, bias=bias
-            ),
+            nn.Conv2d(in_channels, channels, kernel_size=4, stride=2, padding=1, bias=bias),
             nn.BatchNorm2d(channels),
         )
 

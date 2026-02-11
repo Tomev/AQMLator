@@ -208,9 +208,7 @@ class QMLModel(abc.ABC):
             return  # Identity
 
         with qml.QueuingManager.stop_recording():
-            ops = qml.tape.QuantumScript(
-                uploading_constructor(data, **kwargs).decomposition()
-            )
+            ops = qml.tape.QuantumScript(uploading_constructor(data, **kwargs).decomposition())
         for op in ops:
             qml.apply(op)
 
@@ -400,14 +398,10 @@ class QNNModel(QMLModel, abc.ABC):
         self._weights_length: int = 0
 
         for layer in self._layers:
-            self._weights_length += prod(
-                layer.shape(n_layers=1, n_wires=len(self.wires))
-            )
+            self._weights_length += prod(layer.shape(n_layers=1, n_wires=len(self.wires)))
 
         if initial_weights is None or len(initial_weights) != self._weights_length:
-            initial_weights = [
-                np.pi * self._rng.random() for _ in range(self._weights_length)
-            ]
+            initial_weights = [np.pi * self._rng.random() for _ in range(self._weights_length)]
 
         self.weights = initial_weights
 
@@ -418,9 +412,9 @@ class QNNModel(QMLModel, abc.ABC):
         if prediction_function is None:
             prediction_function = self._default_prediction_function
 
-        self._prediction_function: Callable[
-            [Sequence[Sequence[float]]], Union[Sequence[int], Sequence[float]]
-        ] = prediction_function
+        self._prediction_function: Callable[[Sequence[Sequence[float]]], Union[Sequence[int], Sequence[float]]] = (
+            prediction_function
+        )
 
     def create_circuit(self, interface: str = "autograd") -> qml.QNode:
         """Creates a `qml.QNode`.
@@ -465,35 +459,25 @@ class QNNModel(QMLModel, abc.ABC):
                 embedding_inputs = self._prepare_torch_inputs(inputs)
 
             # Initial data uploading
-            self.upload_data(
-                embedding_inputs, self._embedding_method, self._embedding_kwargs
-            )
+            self.upload_data(embedding_inputs, self._embedding_method, self._embedding_kwargs)
 
             start_weights: int = 0
 
             for i, layer in enumerate(self._layers):
                 # Add next data reuploading
-                self.upload_data(
-                    inputs, self._reuploaders[i], self._reuploaders_kwargs[i]
-                )
+                self.upload_data(inputs, self._reuploaders[i], self._reuploaders_kwargs[i])
 
                 # Add next layer
-                layer_shape: Tuple[int, ...] = layer.shape(
-                    n_layers=1, n_wires=len(self.wires)
-                )
+                layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(self.wires))
 
-                layer_weights = weights[
-                    start_weights : start_weights + prod(layer_shape)
-                ]
+                layer_weights = weights[start_weights : start_weights + prod(layer_shape)]
 
                 start_weights += prod(layer_shape)
 
                 layer_weights = layer_weights.reshape(layer_shape)
 
                 with qml.QueuingManager.stop_recording():
-                    ops = qml.tape.QuantumScript(
-                        layer(layer_weights, wires=self.wires).decomposition()
-                    )
+                    ops = qml.tape.QuantumScript(layer(layer_weights, wires=self.wires).decomposition())
 
                 for op in ops:
                     qml.apply(op)
@@ -506,9 +490,7 @@ class QNNModel(QMLModel, abc.ABC):
 
         return qml.QNode(circuit, self.dev, interface=interface)
 
-    def get_circuit_expectation_values(
-        self, features_lists: Sequence[Sequence[float]]
-    ) -> np.ndarray:
+    def get_circuit_expectation_values(self, features_lists: Sequence[Sequence[float]]) -> np.ndarray:
         """
         Computes and returns the expectation value of the `PauliZ` measurement of the
         first qubit of the VQC.
@@ -557,9 +539,7 @@ class QNNModel(QMLModel, abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _default_prediction_function(
-        self, circuit_outputs: Sequence[Sequence[float]]
-    ) -> Sequence[ModelOutput]:
+    def _default_prediction_function(self, circuit_outputs: Sequence[Sequence[float]]) -> Sequence[ModelOutput]:
         """
         The default prediction function that should be specified for every QNN-based
         model.
@@ -635,9 +615,7 @@ class QNNModel(QMLModel, abc.ABC):
                 self._training_y[batch_indices],
             )
 
-        for it, batch_indices in enumerate(
-            chain(*(self._n_epochs * [feature_batches]))
-        ):
+        for it, batch_indices in enumerate(chain(*(self._n_epochs * [feature_batches]))):
             # Update the weights by one optimizer step
             self.weights, cost = self.optimizer.step_and_cost(_batch_cost, self.weights)
 
@@ -723,9 +701,7 @@ class QNNModel(QMLModel, abc.ABC):
         weight_shapes: Dict[str, int] = {"weights": len(self.weights)}
         return qml.qnn.TorchLayer(self.create_circuit("torch"), weight_shapes)
 
-    def predict(
-        self, features: Sequence[Sequence[float]]
-    ) -> Union[Sequence[float], Sequence[int]]:
+    def predict(self, features: Sequence[Sequence[float]]) -> Union[Sequence[float], Sequence[int]]:
         """
         Returns predictions of the model for the given features.
 
@@ -777,15 +753,11 @@ class QNNBinaryClassifier(ClassifierMixin, QNNModel):
 
         self.circuit = self.create_circuit()
 
-        expectation_values: np.ndarray = np.array(
-            [self.circuit(x, weights)[0] for x in X]
-        )
+        expectation_values: np.ndarray = np.array([self.circuit(x, weights)[0] for x in X])
 
         return np.mean((expectation_values - np.array(y)) ** 2)
 
-    def _default_prediction_function(
-        self, circuit_outputs: Sequence[Sequence[float]]
-    ) -> Sequence[ModelOutput]:
+    def _default_prediction_function(self, circuit_outputs: Sequence[Sequence[float]]) -> Sequence[ModelOutput]:
         """
         The default prediction function of the QNNClassifier.
 
@@ -827,17 +799,12 @@ class QNNLinearRegression(RegressorMixin, QNNModel):
         expected_values = [self.circuit(x, weights) for x in X]
 
         predicted_values: np.ndarray = np.array(
-            [
-                sum(np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x)
-                for x in expected_values
-            ]
+            [sum(np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x) for x in expected_values]
         )
 
         return np.mean(predicted_values - np.array(y) ** 2)
 
-    def _default_prediction_function(
-        self, circuit_outputs: Sequence[Sequence[float]]
-    ) -> Sequence[ModelOutput]:
+    def _default_prediction_function(self, circuit_outputs: Sequence[Sequence[float]]) -> Sequence[ModelOutput]:
         """
         The default prediction function of the QNNClassifier.
 
@@ -848,8 +815,7 @@ class QNNLinearRegression(RegressorMixin, QNNModel):
             Returns classification prediction value for the given problem.
         """
         predicted_values: List[ModelOutput] = [
-            sum(np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x)
-            for x in circuit_outputs
+            sum(np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x) for x in circuit_outputs
         ]
 
         return predicted_values
@@ -946,17 +912,13 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         self._weights_length: int = 0
 
         for layer in self._layers:
-            self._weights_length += prod(
-                layer.shape(n_layers=1, n_wires=len(self.wires))
-            )
+            self._weights_length += prod(layer.shape(n_layers=1, n_wires=len(self.wires)))
 
         self._rng_seed: int = rng_seed
         self._rng: random.Random = random.Random(rng_seed)
 
         if initial_weights is None or len(initial_weights) != self._weights_length:
-            initial_weights = [
-                np.pi * self._rng.random() for _ in range(self._weights_length)
-            ]
+            initial_weights = [np.pi * self._rng.random() for _ in range(self._weights_length)]
 
         self.weights = np.array(initial_weights, requires_grad=True)
 
@@ -989,22 +951,16 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         for i, layer in enumerate(self._layers):
             assert i >= 0
             # self.upload_data(features, self._embedding_method, self._embedding_kwargs)
-            self.upload_data(
-                features, self._reuploaders[i], self._reuploaders_kwargs[i]
-            )
+            self.upload_data(features, self._reuploaders[i], self._reuploaders_kwargs[i])
             # TODO(TR): Initially we had data uploading in the loop. Why? For reuploading?
-            layer_shape: Tuple[int, ...] = layer.shape(
-                n_layers=1, n_wires=len(self.wires)
-            )
+            layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(self.wires))
 
             layer_weights = weights[start_weights : start_weights + prod(layer_shape)]
             start_weights += prod(layer_shape)
             layer_weights = np.array(layer_weights).reshape(layer_shape)
 
             with qml.QueuingManager.stop_recording():
-                ops = qml.tape.QuantumScript(
-                    layer(layer_weights, wires=self.wires).decomposition()
-                )
+                ops = qml.tape.QuantumScript(layer(layer_weights, wires=self.wires).decomposition())
 
             for op in ops:
                 qml.apply(op)
@@ -1020,9 +976,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         """
 
         # @qml.qnode(self.dev)
-        def transform(
-            weights: Sequence[float], features: Sequence[float]
-        ) -> List[qml.measurements.ExpectationMP]:
+        def transform(weights: Sequence[float], features: Sequence[float]) -> List[qml.measurements.ExpectationMP]:
             """
             The definition of the feature map VQC.
 
@@ -1055,13 +1009,9 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :rtype: qml.QNode
         """
 
-        def circuit(
-            features: Sequence[float], weights: Sequence[float]
-        ) -> Sequence[float]:
+        def circuit(features: Sequence[float], weights: Sequence[float]) -> Sequence[float]:
             self._ansatz(features, weights)
-            return [
-                qml.expval(qml.PauliZ((i))) for i in self.wires
-            ]  # Doesn't matter anyway. Will be deleted.
+            return [qml.expval(qml.PauliZ((i))) for i in self.wires]  # Doesn't matter anyway. Will be deleted.
 
         return qml.QNode(circuit, device=self.dev, interface=interface)
 
@@ -1077,9 +1027,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         """
 
         # Adjoint circuits is prepared pretty easily.
-        adjoint_ansatz: Callable[[Sequence[float], Sequence[float]], None] = (
-            qml.adjoint(self._ansatz)
-        )
+        adjoint_ansatz: Callable[[Sequence[float], Sequence[float]], None] = qml.adjoint(self._ansatz)
 
         # @qml.qnode(self.dev)
         def kernel_circuit(
@@ -1152,9 +1100,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :return:
             The `kernel_matrix` function that uses the trained kernel.
         """
-        kernel: Callable[[Sequence[float], Sequence[float], Sequence[float]], float] = (
-            self._create_kernel()
-        )
+        kernel: Callable[[Sequence[float], Sequence[float], Sequence[float]], float] = self._create_kernel()
 
         return qml.kernels.kernel_matrix(
             list(x),
@@ -1194,9 +1140,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         if y is None:
             raise AttributeError("Missing y in supervised learning model.")
 
-        kernel: Callable[[Sequence[float], Sequence[float], Sequence[float]], float] = (
-            self._create_kernel()
-        )
+        kernel: Callable[[Sequence[float], Sequence[float], Sequence[float]], float] = self._create_kernel()
 
         self._split_data_for_training(X, y)
 
@@ -1215,11 +1159,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             """
 
             # Choose subset of datapoints to compute the KTA on.
-            subset: np.ndarray = np.array(
-                self._rng.sample(
-                    list(range(len(self._training_X))), self._kta_subset_size
-                )
-            )
+            subset: np.ndarray = np.array(self._rng.sample(list(range(len(self._training_X))), self._kta_subset_size))
 
             return -target_alignment(
                 list(self._training_X[subset]),
@@ -1257,9 +1197,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         return self
 
-    def transform(
-        self, features_lists: Sequence[Sequence[float]]
-    ) -> List[List[qml.measurements.ExpectationMP]]:
+    def transform(self, features_lists: Sequence[Sequence[float]]) -> List[List[qml.measurements.ExpectationMP]]:
         """
         Maps the object described by the `features` into it's representation in the
         feature space.
@@ -1279,9 +1217,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
 
         return mapped_features
 
-    def predict(
-        self, features_lists: Sequence[Sequence[float]]
-    ) -> Sequence[ModelOutput]:
+    def predict(self, features_lists: Sequence[Sequence[float]]) -> Sequence[ModelOutput]:
         """
         Predicts and returns the classes of the objects for which features were given.
         It applies current `self.weights` as the parameters of VQC.
@@ -1395,9 +1331,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         for classifier in self._binary_classifiers:
             classifier.dev = new_dev
 
-    def _prepare_default_binary_classifiers(
-        self, batch_size: int
-    ) -> List[QNNBinaryClassifier]:
+    def _prepare_default_binary_classifiers(self, batch_size: int) -> List[QNNBinaryClassifier]:
         """
         Prepares as set od default binary classifiers with the parameters specified
         during the class initialization.
@@ -1472,9 +1406,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
         unique_classes: np.ndarray = np.unique(y)
 
         if len(unique_classes) > len(self._binary_classifiers):
-            raise AssertionError(
-                "Numbers of provided binary classifiers and classes don't match!"
-            )
+            raise AssertionError("Numbers of provided binary classifiers and classes don't match!")
 
         binary_classifier_accuracy_threshold: float = np.sqrt(self.accuracy_threshold)
 
@@ -1511,9 +1443,7 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             current_class: int = 0
 
             for i, classifier in enumerate(self._binary_classifiers):
-                expectation: float = classifier.get_circuit_expectation_values([x])[0][
-                    0
-                ]
+                expectation: float = classifier.get_circuit_expectation_values([x])[0][0]
 
                 if expectation > max_expectation:
                     max_expectation = expectation
@@ -1560,9 +1490,7 @@ class RBMClustering:
             quantize=True,  # Required, because it will be the input of the RBM.
         )
 
-        self.rbm: RBM = RBM(
-            num_visible=rbm_n_visible_neurons, num_hidden=rbm_n_hidden_neurons, rng=rng
-        )
+        self.rbm: RBM = RBM(num_visible=rbm_n_visible_neurons, num_hidden=rbm_n_hidden_neurons, rng=rng)
 
         self.n_gpus: int = n_gpus
         self.n_epochs: int = n_epochs
@@ -1593,9 +1521,7 @@ class RBMClustering:
         rbm_trainer: RBMTrainer
         # Pick a trainer depending on the existence of the sampler.
         if self.sampler is None:
-            rbm_trainer = CD1Trainer(
-                num_steps=self.n_epochs, learning_rate=self.learning_rate
-            )
+            rbm_trainer = CD1Trainer(num_steps=self.n_epochs, learning_rate=self.learning_rate)
         else:
             rbm_trainer = AnnealingRBMTrainer(
                 sampler=self.sampler,
@@ -1603,9 +1529,7 @@ class RBMClustering:
                 num_steps=self.n_epochs,
             )
 
-        rbm_trainer.fit(
-            self.rbm, self._encoded_data_loader(data_loader, self.lbae.encoder)
-        )
+        rbm_trainer.fit(self.rbm, self._encoded_data_loader(data_loader, self.lbae.encoder))
 
     @staticmethod
     def _encoded_data_loader(
@@ -1638,12 +1562,5 @@ class RBMClustering:
             Predicted class.
         """
         encoded_x: Tensor = self.lbae.encoder(x)[0]
-        h_probs: NDArray[np.float32] = self.rbm.h_probs_given_v(
-            encoded_x.detach().numpy()
-        )
-        return Tensor(
-            [
-                [1 if p > self.fireing_threshold else 0 for p in h_prob]
-                for h_prob in h_probs
-            ]
-        )
+        h_probs: NDArray[np.float32] = self.rbm.h_probs_given_v(encoded_x.detach().numpy())
+        return Tensor([[1 if p > self.fireing_threshold else 0 for p in h_prob] for h_prob in h_probs])

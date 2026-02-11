@@ -357,9 +357,7 @@ class ModelFinder(OptunaOptimizer):
             n_jobs=self._n_cores,
         )
 
-    def _simple_model_objective_function(
-        self, trial: optuna.trial.Trial
-    ) -> Tuple[float, float, float, float]:
+    def _simple_model_objective_function(self, trial: optuna.trial.Trial) -> Tuple[float, float, float, float]:
         """
         Default objective function of the `optuna` optimizer for the model finding. It
         is meant to work for all the simple (single) models.
@@ -378,21 +376,15 @@ class ModelFinder(OptunaOptimizer):
         """
         self._initialize_model_dict()
 
-        model_type: str = trial.suggest_categorical(
-            "model_type" + self._optuna_postfix, list(self._models_dict)
-        )
+        model_type: str = trial.suggest_categorical("model_type" + self._optuna_postfix, list(self._models_dict))
 
-        kwargs: Dict[str, Any] = self._suggest_supervised_model_kwargs(
-            trial, model_type
-        )
+        kwargs: Dict[str, Any] = self._suggest_supervised_model_kwargs(trial, model_type)
 
         model: QMLModel = self._models_dict[model_type]["constructor"](**kwargs)
 
         return self._evaluate_supervised_model(model)
 
-    def _grouping_model_objective_function(
-        self, trial: optuna.trial.Trial
-    ) -> Tuple[float, float, float, float]:
+    def _grouping_model_objective_function(self, trial: optuna.trial.Trial) -> Tuple[float, float, float, float]:
         """
         Objective function of the `optuna` optimizer for grouping model finder.
 
@@ -405,13 +397,9 @@ class ModelFinder(OptunaOptimizer):
         """
         self._initialize_model_dict()
 
-        model_type: str = trial.suggest_categorical(
-            "model_type" + self._optuna_postfix, list(self._models_dict)
-        )
+        model_type: str = trial.suggest_categorical("model_type" + self._optuna_postfix, list(self._models_dict))
 
-        kwargs: Dict[str, Any] = self._suggest_unsupervised_model_kwargs(
-            trial, model_type
-        )
+        kwargs: Dict[str, Any] = self._suggest_unsupervised_model_kwargs(trial, model_type)
 
         model: RBMClustering = self._models_dict[model_type]["constructor"](**kwargs)
 
@@ -433,9 +421,7 @@ class ModelFinder(OptunaOptimizer):
         if self._task_type == MLTaskType.GROUPING:
             self._models_dict = clustering
 
-    def _evaluate_unsupervised_model(
-        self, model: RBMClustering
-    ) -> Tuple[float, float, float, float]:
+    def _evaluate_unsupervised_model(self, model: RBMClustering) -> Tuple[float, float, float, float]:
         """
         Evaluates the performance of the given model. The evaluation is based on the
         Silhouette score (which takes values from [-1, 1]). The higher the score, the
@@ -448,13 +434,9 @@ class ModelFinder(OptunaOptimizer):
             The average Silhouette score obtained by the model.
         """
         score: float = 0
-        score_x = np.array(self._x).reshape(
-            len(self._x), int(prod(np.array(self._x[0]).shape))
-        )
+        score_x = np.array(self._x).reshape(len(self._x), int(prod(np.array(self._x[0]).shape)))
 
-        data: Sequence[Tuple[Tensor, Tensor]] = [
-            (Tensor(val), Tensor([-1])) for val in self._x
-        ]
+        data: Sequence[Tuple[Tensor, Tensor]] = [(Tensor(val), Tensor([-1])) for val in self._x]
 
         # Type ignore the following line, because Torch isn't type-hinted well enough.
         data_loader: DataLoader[Tuple[Tensor, Tensor]] = DataLoader(
@@ -470,9 +452,7 @@ class ModelFinder(OptunaOptimizer):
 
             model.fit(data_loader)
 
-            labels: List[Tuple[int, ...]] = [
-                tuple(t) for val in data_loader for t in model.predict(val[0])
-            ]
+            labels: List[Tuple[int, ...]] = [tuple(t) for val in data_loader for t in model.predict(val[0])]
 
             group_labels: List[Tuple[int, ...]] = list(set(labels))
             groups: List[int] = [group_labels.index(label) for label in labels]
@@ -486,9 +466,7 @@ class ModelFinder(OptunaOptimizer):
 
         return score / self._n_seeds, 0, 0, 0  # TODO: 0s are just placeholders
 
-    def _evaluate_supervised_model(
-        self, model: QMLModel
-    ) -> Tuple[float, float, float, float]:
+    def _evaluate_supervised_model(self, model: QMLModel) -> Tuple[float, float, float, float]:
         """
         Evaluates the performance of the given model. The evaluation is based on the
         number of calls to the quantum machine (which are _expensive_) during the
@@ -513,9 +491,7 @@ class ModelFinder(OptunaOptimizer):
             return avg_n_exec, 0, 0, 0
 
         pennylane_circuit: qml.QNode = model.create_circuit()
-        tape: qml.tape.QuantumScript = qml.tape.make_qscript(pennylane_circuit)(
-            self._x[0], np.array(model.weights)
-        )
+        tape: qml.tape.QuantumScript = qml.tape.make_qscript(pennylane_circuit)(self._x[0], np.array(model.weights))
         qiskit_cirtuit: qiskit.QuantumCircuit = circuit_to_qiskit(tape, model.n_qubit)
         qiskit_cirtuit.remove_final_measurements()
 
@@ -524,16 +500,12 @@ class ModelFinder(OptunaOptimizer):
         subsystem_b: List[int] = list(range(model.n_qubit // 2, model.n_qubit))
 
         qlr: float = quantum_locality_ratio(qiskit_cirtuit)
-        eee: float = effective_entanglement_entropy(
-            final_state, subsystem_qubits=subsystem_a
-        )
+        eee: float = effective_entanglement_entropy(final_state, subsystem_qubits=subsystem_a)
         qmi = quantum_mutual_information(final_state, subsystem_a, subsystem_b)
 
         return avg_n_exec, qlr, eee, qmi
 
-    def _classification_objective_function(
-        self, trial: optuna.trial.Trial
-    ) -> Tuple[float, float, float, float]:
+    def _classification_objective_function(self, trial: optuna.trial.Trial) -> Tuple[float, float, float, float]:
         """
         Objective function of the `optuna` optimizer for classification model finder.
 
@@ -562,9 +534,7 @@ class ModelFinder(OptunaOptimizer):
         qnn_binary_classifiers: List[QNNBinaryClassifier] = []
 
         for i in range(n_classes):
-            qnn_binary_classifiers.append(
-                QNNBinaryClassifier(**binary_classifiers_kwargs[i])
-            )
+            qnn_binary_classifiers.append(QNNBinaryClassifier(**binary_classifiers_kwargs[i]))
 
         classifier: QNNClassifier = QNNClassifier(
             wires=range(len(self._x)),
@@ -576,9 +546,7 @@ class ModelFinder(OptunaOptimizer):
 
         return self._evaluate_supervised_model(classifier)
 
-    def _suggest_supervised_model_kwargs(
-        self, trial: optuna.trial.Trial, model_type: str
-    ) -> Dict[str, Any]:
+    def _suggest_supervised_model_kwargs(self, trial: optuna.trial.Trial, model_type: str) -> Dict[str, Any]:
         """
         Suggests the kwargs for the specified (qml) model.
 
@@ -618,9 +586,7 @@ class ModelFinder(OptunaOptimizer):
 
         return kwargs
 
-    def _suggest_unsupervised_model_kwargs(
-        self, trial: optuna.trial.Trial, model_type: str
-    ) -> Dict[str, Any]:
+    def _suggest_unsupervised_model_kwargs(self, trial: optuna.trial.Trial, model_type: str) -> Dict[str, Any]:
         """
         Suggests the kwargs for the specified (unsupervised learning) model.
 
@@ -674,9 +640,7 @@ class ModelFinder(OptunaOptimizer):
 
         return kwargs
 
-    def _suggest_embedding(
-        self, trial: optuna.trial.Trial, kwargs: Dict[str, Any]
-    ) -> None:
+    def _suggest_embedding(self, trial: optuna.trial.Trial, kwargs: Dict[str, Any]) -> None:
         """
         Using 'optuna', suggest the embedding and its `kwargs`. Everything is then added
         to the given `kwargs`.
@@ -687,9 +651,7 @@ class ModelFinder(OptunaOptimizer):
             A dictionary of keyword arguments that will be used to initialize the
             QML model.
         """
-        embedding_type: str = trial.suggest_categorical(
-            "embedding" + self._optuna_postfix, list(data_embeddings)
-        )
+        embedding_type: str = trial.suggest_categorical("embedding" + self._optuna_postfix, list(data_embeddings))
 
         kwargs["embedding_method"] = data_embeddings[embedding_type]["constructor"]
 
@@ -699,9 +661,7 @@ class ModelFinder(OptunaOptimizer):
 
         kwargs["embedding_kwargs"] = embedding_kwargs
 
-    def _suggest_layers(
-        self, trial: optuna.trial.Trial, kwargs: Dict[str, Any]
-    ) -> None:
+    def _suggest_layers(self, trial: optuna.trial.Trial, kwargs: Dict[str, Any]) -> None:
         """
         Using `optuna`, suggest the order of layers in the VQC based on the `kwargs`
         given.
@@ -723,9 +683,7 @@ class ModelFinder(OptunaOptimizer):
 
         for i in range(kwargs["n_layers"]):
             # Select the layer.
-            layer_type: str = trial.suggest_categorical(
-                f"layer_{i}" + self._optuna_postfix, list(layer_types)
-            )
+            layer_type: str = trial.suggest_categorical(f"layer_{i}" + self._optuna_postfix, list(layer_types))
             layers.append(layer_types[layer_type]["constructor"])
 
             # Select the reuploader and it's kwargs.
@@ -826,9 +784,7 @@ class HyperparameterTuner(OptunaOptimizer):
             directions=["minimize", "maximize", "maximize", "minimize"],
         )
 
-        study.optimize(
-            self._optuna_objective, n_trials=self._n_trials, n_jobs=self._n_cores
-        )
+        study.optimize(self._optuna_objective, n_trials=self._n_trials, n_jobs=self._n_cores)
 
     @staticmethod
     def _suggest_optimizer(trial: optuna.trial.Trial) -> GradientDescentOptimizer:
@@ -848,13 +804,9 @@ class HyperparameterTuner(OptunaOptimizer):
 
         # TR: Might need rebuilding for int and str kwargs.
         for kwarg in kwargs_data:
-            kwargs[kwarg] = trial.suggest_float(
-                kwarg, kwargs_data[kwarg]["min"], kwargs_data[kwarg]["max"]
-            )
+            kwargs[kwarg] = trial.suggest_float(kwarg, kwargs_data[kwarg]["min"], kwargs_data[kwarg]["max"])
 
-        optimizer: GradientDescentOptimizer = optimizers[optimizer_type]["constructor"](
-            **kwargs
-        )
+        optimizer: GradientDescentOptimizer = optimizers[optimizer_type]["constructor"](**kwargs)
 
         return optimizer
 
@@ -879,24 +831,16 @@ class HyperparameterTuner(OptunaOptimizer):
         avg_n_exec: float = tracker.totals["executions"] / self._n_seeds
 
         pennylane_circuit: qml.QNode = self._model.create_circuit()
-        tape: qml.tape.QuantumScript = qml.tape.make_qscript(pennylane_circuit)(
-            self._x[0], self._model.weights
-        )
-        qiskit_cirtuit: qiskit.QuantumCircuit = circuit_to_qiskit(
-            tape, self._model.n_qubit
-        )
+        tape: qml.tape.QuantumScript = qml.tape.make_qscript(pennylane_circuit)(self._x[0], self._model.weights)
+        qiskit_cirtuit: qiskit.QuantumCircuit = circuit_to_qiskit(tape, self._model.n_qubit)
         qiskit_cirtuit.remove_final_measurements()
 
         final_state = Statevector.from_instruction(qiskit_cirtuit)
         subsystem_a: List[int] = list(range(self._model.n_qubit // 2))
-        subsystem_b: List[int] = list(
-            range(self._model.n_qubit // 2, self._model.n_qubit)
-        )
+        subsystem_b: List[int] = list(range(self._model.n_qubit // 2, self._model.n_qubit))
 
         qlr: float = quantum_locality_ratio(qiskit_cirtuit)
-        eee: float = effective_entanglement_entropy(
-            final_state, subsystem_qubits=subsystem_a
-        )
+        eee: float = effective_entanglement_entropy(final_state, subsystem_qubits=subsystem_a)
         qmi = quantum_mutual_information(final_state, subsystem_a, subsystem_b)
 
         return avg_n_exec, qlr, eee, qmi

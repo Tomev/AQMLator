@@ -44,12 +44,7 @@ def _dump_postgres_base(dump_file_name: str = "aqmlatorDump.sql") -> None:
     :param dump_file_name:
         Name of the file to dump the database into.
     """
-    command: str = (
-        "pg_dump --create --inserts -f "
-        + dump_file_name
-        + " -d "
-        + os.environ["aqmlator_database_url"]
-    )
+    command: str = "pg_dump --create --inserts -f " + dump_file_name + " -d " + os.environ["aqmlator_database_url"]
 
     with Popen(command, shell=True) as proc:
         proc.wait()
@@ -91,9 +86,7 @@ def _parse_to_sqlite(sql_file: str = "aqmlatorDump.sql") -> None:
         f.write(parsed_sql)
 
 
-def _initialize_sqlite_db(
-    sql_file: str, sqlite_db_name: str = "aqmlatorSQLite.db"
-) -> None:
+def _initialize_sqlite_db(sql_file: str, sqlite_db_name: str = "aqmlatorSQLite.db") -> None:
     """
     Initializes the SQLite database from the given .sql file.
 

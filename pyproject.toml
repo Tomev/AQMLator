@@ -42,6 +42,10 @@ coverage = "coverage"
 DEP002 = ["ruff", "dill", "psycopg2", "pennylane-lightning", "qiskit-aer"]
 
 
+[tool.ruff]
+line-length = 120
+
+
 [project]
 name = "AQMLator"
 version = "1.1.0"

@@ -90,9 +90,7 @@ def qubo_from_rbm_coefficients(
     }
 
     quadratic: Dict[Tuple[int, int], float] = {
-        (i, j + len(v_bias)): float(weights[i, j])
-        for i in range(len(v_bias))
-        for j in range(len(h_bias))
+        (i, j + len(v_bias)): float(weights[i, j]) for i in range(len(v_bias)) for j in range(len(h_bias))
     }
 
     return dimod.BQM(linear, quadratic, offset=0, vartype="BINARY")
@@ -121,22 +119,15 @@ class RBM:
         """
         self.num_visible: int = num_visible
         self.num_hidden: int = num_hidden
-        self.rng: np.random.Generator = (
-            rng if rng is not None else np.random.default_rng()
-        )
+        self.rng: np.random.Generator = rng if rng is not None else np.random.default_rng()
 
         self.weights: NDArray[np.float32] = (
-            self.rng.normal(size=(self.num_visible, self.num_hidden))
-            * INITIAL_COEFFICIENT_SCALE
+            self.rng.normal(size=(self.num_visible, self.num_hidden)) * INITIAL_COEFFICIENT_SCALE
         )
 
-        self.v_bias: NDArray[np.float32] = (
-            self.rng.normal(size=self.num_visible) * INITIAL_COEFFICIENT_SCALE
-        )
+        self.v_bias: NDArray[np.float32] = self.rng.normal(size=self.num_visible) * INITIAL_COEFFICIENT_SCALE
 
-        self.h_bias: NDArray[np.float32] = (
-            self.rng.normal(size=self.num_hidden) * INITIAL_COEFFICIENT_SCALE
-        )
+        self.h_bias: NDArray[np.float32] = self.rng.normal(size=self.num_hidden) * INITIAL_COEFFICIENT_SCALE
 
     def h_probs_given_v(self, v_batch: NDArray[np.float32]) -> NDArray[np.float32]:
         """
@@ -287,11 +278,7 @@ class RBMTrainer:
             batch = np.array(batch.detach().cpu().numpy().squeeze())
 
             self.training_step(rbm, batch)
-            loss: float = (
-                (np.array(batch - rbm.reconstruct(batch)) ** 2).sum()
-                / batch.shape[0]
-                / batch.shape[1]
-            )
+            loss: float = (np.array(batch - rbm.reconstruct(batch)) ** 2).sum() / batch.shape[0] / batch.shape[1]
 
             if isinstance(data_iterator, tqdm):
                 data_iterator.set_postfix(loss=loss)
@@ -365,30 +352,19 @@ class AnnealingRBMTrainer(RBMTrainer):
         # variables. If the sampler supports num_reads, use it, otherwise repeat
         # the sampling for each data point in the batch.
         if "num_reads" in self.sampler.parameters:
-            sample = self.sampler.sample(
-                bqm, num_reads=len(batch), **self.sampler_kwargs
-            ).record["sample"]
+            sample = self.sampler.sample(bqm, num_reads=len(batch), **self.sampler_kwargs).record["sample"]
         else:
             sample = dimod.concatenate(
-                [
-                    self.sampler.sample(bqm, **self.sampler_kwargs)
-                    for _ in range(len(batch))
-                ]
+                [self.sampler.sample(bqm, **self.sampler_kwargs) for _ in range(len(batch))]
             ).record["sample"]
         # Split, remembering that first variables correspond to hidden layer.
         sample_v = sample[:, : rbm.num_visible]
         sample_h = sample[:, rbm.num_visible :]
         # Update weights.
-        rbm.weights += (
-            self.learning_rate * (batch.T @ hidden - sample_v.T @ sample_h) / len(batch)
-        )
+        rbm.weights += self.learning_rate * (batch.T @ hidden - sample_v.T @ sample_h) / len(batch)
         # And biases
-        rbm.v_bias += (
-            self.learning_rate * np.asarray(batch - sample_v).sum(axis=0).squeeze()
-        )
-        rbm.h_bias += (
-            self.learning_rate * np.asarray(hidden - sample_h).sum(axis=0).squeeze()
-        )
+        rbm.v_bias += self.learning_rate * np.asarray(batch - sample_v).sum(axis=0).squeeze()
+        rbm.h_bias += self.learning_rate * np.asarray(hidden - sample_h).sum(axis=0).squeeze()
 
 
 class CD1Trainer(RBMTrainer):
@@ -425,11 +401,7 @@ class CD1Trainer(RBMTrainer):
         visible_2: NDArray[np.float32] = rbm.v_probs_given_h(hidden_1)
         hidden_2: NDArray[np.float32] = rbm.h_probs_given_v(visible_2)
 
-        rbm.weights += np.array(
-            self.learning_rate
-            * (batch.T @ hidden_1 - visible_2.T @ hidden_2)
-            / len(batch)
-        )
+        rbm.weights += np.array(self.learning_rate * (batch.T @ hidden_1 - visible_2.T @ hidden_2) / len(batch))
 
         # And biases
         rbm.v_bias += self.learning_rate * (batch - visible_2).sum(axis=0)
