@@ -235,9 +235,211 @@ class OptunaOptimizer(abc.ABC):
         return environ["aqmlator_database_url"]
 
 
+class AnsatzFinder:
+    """A class implementing the :class:`optuna`-based QAS approach.
+
+    .. important::
+
+        TODO(TR): Add tests for this class
+    """
+
+    def __init__(self, n_wires: int, n_min_layers: int = 1, n_max_layers: int = 5, optuna_postfix: str = "") -> None:
+        """TODO(TR): Update once done."""
+        self._n_min_layers: int = 1
+        self._n_max_layers: int = 1
+
+        self.n_wires = n_wires
+        self._n_min_layers = n_min_layers
+        self._n_max_layers = n_max_layers
+
+        self._optuna_postfix: str = optuna_postfix
+
+    @property
+    def n_wires(self) -> int:
+        """The getter for the ``AnsatzFinder.n_wires`` property.
+
+        :return:
+            The current value of the ``self.n_wires`` propety.
+        :rtype: int
+        """
+        return self._n_wires
+
+    @n_wires.setter
+    def n_wires(self, n_wires: int) -> None:
+        """The setter for the ``AnsatzFinder.n_wires`` property.
+
+        :param n_wires:
+            The new number of wires (qutits) in the ansatz to look for.
+        :type n_wires: int
+        :raises ValueError:
+            The ``n_wires`` must be a positive integer. Raises :class:`ValueError` otherwise.
+        """
+        if n_wires < 1:
+            raise ValueError(f"n_wires must be a positive integer. Got {n_wires}.")
+
+        self._n_wires: int = n_wires
+
+    @property
+    def n_min_layers(self) -> int:
+        """The getter for the ``AnsatzFinder.n_min_layers`` property.
+
+        :return:
+            The current value of the ``self.n_min_layers`` propety.
+        :rtype: int
+        """
+        return self._n_min_layers
+
+    @n_min_layers.setter
+    def n_min_layers(self, n_min_layers: int) -> None:
+        """The setter for the ``AnsatzFinder.n_max_layers`` property.
+
+        :param n_min_layers:
+            The new minimal number of layers in the sought ansatz.
+        :type n_min_layers: int
+
+        :raises ValueError:
+            The ``n_min_layers`` must be a positive integer. Raises :class:`ValueError` otherwise.
+        :raises ValueError:
+            The ``n_min_layers`` must not be larger than ``self.n_max_layers``. Raises :class:`ValueError` otherwise.
+        """
+        if n_min_layers < 1:
+            raise ValueError(f"n_min_layers must be a positive integer. Got {n_min_layers}.")
+
+        if n_min_layers > self.n_max_layers:
+            raise ValueError(
+                f"n_min_layers cannot be larger than self.n_max_layers ({self.n_max_layers})." + f"Got {n_min_layers}."
+            )
+
+        self._n_min_layers = n_min_layers
+
+    @property
+    def n_max_layers(self) -> int:
+        """The getter for the ``AnsatzFinder.n_max_layers`` property.
+
+        :return:
+            The current value of the ``self.n_max_layers`` propety.
+        :rtype: int
+        """
+        return self._n_max_layers
+
+    @n_max_layers.setter
+    def n_max_layers(self, n_max_layers: int) -> None:
+        """The setter for the ``AnsatzFinder.n_max_layers`` property.
+
+        :param n_max_layers:
+            The new maximal number of layers in the sought ansatz.
+        :type n_max_layers: int
+
+        :raises ValueError:
+            The ``n_max_layers`` must be a positive integer. Raises :class:`ValueError` otherwise.
+        :raises ValueError:
+            The ``n_max_layers`` must not be larger than ``self.n_min_layers``. Raises :class:`ValueError` otherwise.
+        """
+        if n_max_layers < 1:
+            raise ValueError(f"n_max_layers must be a positive integer. Got {n_max_layers}.")
+
+        if n_max_layers < self.n_min_layers:
+            raise ValueError(
+                f"n_max_layers cannot be larger than self.n_min_layers ({self.n_min_layers})." + f"Got {n_max_layers}."
+            )
+
+        self._n_max_layers = n_max_layers
+
+    def suggest_ansatz(self, trial: optuna.Trial) -> dict[str, Any]:
+        """TODO(TR): Fill once done.
+
+        :param trial: _description_
+        :type trial: optuna.Trial
+        :return: _description_
+        :rtype: dict[str, Any]
+        """
+        kwargs: Dict[str, Any] = {
+            "wires": self.n_wires,
+            "n_layers": trial.suggest_int(
+                "n_layers" + self._optuna_postfix,
+                self.n_min_layers,
+                self.n_max_layers,
+            ),
+        }
+
+        self._suggest_embedding(trial, kwargs)
+        self._suggest_layers(trial, kwargs)
+
+        return kwargs
+
+    def _suggest_embedding(self, trial: optuna.trial.Trial, kwargs: Dict[str, Any]) -> None:
+        """
+        Using 'optuna', suggest the embedding and its `kwargs`. Everything is then added
+        to the given `kwargs`.
+
+        :param trial:
+            Optuna `Trial` object that "suggests" the parameters values.
+        :param kwargs:
+            A dictionary of keyword arguments that will be used to initialize the
+            QML model.
+        """
+        embedding_type: str = trial.suggest_categorical("embedding" + self._optuna_postfix, list(data_embeddings))
+
+        kwargs["embedding_method"] = data_embeddings[embedding_type]["constructor"]
+
+        embedding_kwargs: Dict[str, Any] = {"wires": range(kwargs["wires"])}
+
+        embedding_kwargs.update(data_embeddings[embedding_type]["fixed_kwargs"])
+
+        kwargs["embedding_kwargs"] = embedding_kwargs
+
+    def _suggest_layers(self, trial: optuna.trial.Trial, kwargs: Dict[str, Any]) -> None:
+        """
+        Using :mod:`optuna`, suggest the order of layers in the VQC based on the ``kwargs`` given.
+
+        .. important::
+
+            Each QML model layer is a (data uploading, weighted layer) pair. Since each our model starts with a data
+            uplading scheme, first data re-uploading should always be an identity. This will make the processing easier.
+            TODO(TR): This could possibly be optimized to include the data embedding as first re-uploading.
+
+        :param trial:
+            Optuna `Trial` object that "suggests" the parameters values.
+        :param kwargs:
+            A dictionary of keyword arguments that will be used to initialize the
+            QML model.
+        """
+        layers: List[Type[qml.operation.Operation]] = []
+        reuploaders: list[Type[qml.operation.Operation] | None] = [None]
+        reuploaders_kwargs: list[dict[str, Any]] = [{}]
+
+        for i in range(kwargs["n_layers"]):
+            # Select the layer.
+            layer_type: str = trial.suggest_categorical(f"layer_{i}" + self._optuna_postfix, list(layer_types))
+            layers.append(layer_types[layer_type]["constructor"])
+
+            # Select the reuploader and it's kwargs.
+            reuploader_type: str = trial.suggest_categorical(
+                f"reuploader_{i + 1}{self._optuna_postfix}", list(reuploading_types)
+            )
+            reuploaders.append(reuploading_types[reuploader_type]["constructor"])
+            reuploaders_kwargs.append({"wires": range(kwargs["wires"])})
+
+            # TODO(TR): For now, only categorical are allowed, if any. This class needs a dire refactor anyway.
+            for kwarg in list(reuploading_types[reuploader_type]["kwargs"]):
+                reuploaders_kwargs[-1][kwarg] = trial.suggest_categorical(
+                    f"reuploader_{i}_{kwarg}{self._optuna_postfix}",
+                    reuploading_types[reuploader_type]["kwargs"][kwarg],
+                )
+
+            # TR:   So far all the layer types begin with (N_LAYERS, N_WIRES) tuple, and
+            #       then proceed with some additional parameters. This may need to be
+            #       rethought later.
+
+        kwargs["layers"] = layers
+        kwargs["reuploaders"] = reuploaders
+        kwargs["reuploaders_kwargs"] = reuploaders_kwargs
+        kwargs.pop("n_layers")
+
+
 class ModelFinder(OptunaOptimizer):
     """
-    A class for finding the best QNN model for given data and task.
+    A class for finding the best QML model for given data and task.
     """
 
     # TODO TR:  Make it so that the supervised and unsupervised learning parts use
@@ -367,8 +569,7 @@ class ModelFinder(OptunaOptimizer):
             optimizes the structure of the VQC for the model.
 
         :param trial:
-            The `optuna` Trial object used to randomize and store the
-            results_reconstruction of the optimization.
+            The :class:`optuna.Trial` object used to randomize and store the results_reconstruction of the optimization.
 
         :return:
             The average number of calls made to the quantum device (which `optuna`
@@ -560,6 +761,16 @@ class ModelFinder(OptunaOptimizer):
         :return:
             Returns the suggested kwargs for the selected (qml) model type.
         """
+        antatz_finder: AnsatzFinder = AnsatzFinder(
+            n_wires=len(self._x[0]),
+            n_min_layers=self._models_dict[model_type]["n_layers"][0],
+            n_max_layers=self._models_dict[model_type]["n_layers"][1],
+            optuna_postfix=self._optuna_postfix,
+        )
+
+        kwargs: Dict[str, Any] = antatz_finder.suggest_ansatz(trial)
+
+        s = """
         kwargs: Dict[str, Any] = {
             "wires": len(self._x[0]),
             "n_layers": trial.suggest_int(
@@ -571,6 +782,13 @@ class ModelFinder(OptunaOptimizer):
             "accuracy_threshold": self._minimal_accuracy,
         }
 
+        self._suggest_embedding(trial, kwargs)
+        self._suggest_layers(trial, kwargs)
+        """
+        assert len(s) > 0
+
+        kwargs.update({"n_epochs": self._n_epochs, "accuracy_threshold": self._minimal_accuracy})
+
         # TR: Might need to be extended for different arguments type at some point.
         kwargs_data: Dict[str, Any] = self._models_dict[model_type]["kwargs"]
 
@@ -580,9 +798,6 @@ class ModelFinder(OptunaOptimizer):
                 kwargs_data[kwarg][0],
                 kwargs_data[kwarg][1],
             )
-
-        self._suggest_embedding(trial, kwargs)
-        self._suggest_layers(trial, kwargs)
 
         return kwargs
 
