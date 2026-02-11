@@ -13,7 +13,7 @@ publish-url = "https://test.pypi.org/legacy/"
 explicit = true
 
 [tool.uv.sources]
-qmetric = { git = "https://gitlab.com/illesova.silvie.scholar/qmetric.git", branch = "tr_xqml" }
+qmetric = { git = "ssh://git@gitlab.com/illesova.silvie.scholar/qmetric.git" }
 
 [tool.deptry.package_module_name_map]
 fastapi = "fastapi"
@@ -34,7 +34,8 @@ qiskit = "qiskit"
 qmetric = "qmetric"
 pennylane-qiskit = "pennylane_qiskit"
 qiskit-aer = "qiskit_aer"
-scipt = "scipy"
+scipy = "scipy"
+coverage = "coverage"
 
 
 [tool.deptry.per_rule_ignores]
@@ -62,7 +63,7 @@ dependencies = [
     "psycopg2>=2.9.11",
     "qiskit==2.1.0",
     "qiskit-aer>=0.17.2",
-    "qmetric @ git+ssh://git@gitlab.com/illesova.silvie.scholar/qmetric.git@tr_xqml",
+    "qmetric",
     "ruff>=0.14.9",
     "scikit-learn>=1.8.0",
     "scipy>=1.16.3",
@@ -87,6 +88,7 @@ repository = "https://github.com/Tomev/AQMLator"
 
 [dependency-groups]
 dev = [
+    "coverage>=7.13.4",
     "deptry>=0.24.0",
     "ruff>=0.14.10",
 ]
