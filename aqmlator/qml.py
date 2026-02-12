@@ -72,6 +72,14 @@ from qbm4eo.rbm import RBM, AnnealingRBMTrainer, CD1Trainer, RBMTrainer
 ModelOutput = TypeVar("ModelOutput", float, int)
 
 
+class CircuitBuilder:
+    """ A class for transforming ansatz recipes, found by the :class:`aqmlator.tuner.AnsatzFinder` into 
+    :mod:`pennylane`-applicable quantum ansatze. """
+    
+    def __init__(self) -> None:
+        raise NotImplementedError
+
+
 class QMLModel(abc.ABC):
     """
     A boilerplate class, providing an interface for future QML models.
@@ -450,22 +458,14 @@ class QNNModel(QMLModel, abc.ABC):
                 The expectation value (from range [-1, 1]) of the measurement in the
                 computational basis of given circuit.
             """
-
-            # TODO(TR): REFACTOR!
-            embedding_inputs: torch.Tensor = inputs
-            if isinstance(inputs, torch.Tensor):
-                # For now: Padding for AmplitudeEmbedding
-                # For some reason this is not needed in the QEK...
-                embedding_inputs = self._prepare_torch_inputs(inputs)
-
-            # Initial data uploading
-            self.upload_data(embedding_inputs, self._embedding_method, self._embedding_kwargs)
+            self._embedding_method(inputs, **(self._embedding_kwargs))
 
             start_weights: int = 0
 
             for i, layer in enumerate(self._layers):
                 # Add next data reuploading
-                self.upload_data(inputs, self._reuploaders[i], self._reuploaders_kwargs[i])
+                if self._reuploaders[i] is not None:
+                    self._reuploaders[i](inputs, **(self._reuploaders_kwargs[i]))
 
                 # Add next layer
                 layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(self.wires))
@@ -475,12 +475,9 @@ class QNNModel(QMLModel, abc.ABC):
                 start_weights += prod(layer_shape)
 
                 layer_weights = layer_weights.reshape(layer_shape)
-
-                with qml.QueuingManager.stop_recording():
-                    ops = qml.tape.QuantumScript(layer(layer_weights, wires=self.wires).decomposition())
-
-                for op in ops:
-                    qml.apply(op)
+            
+                layer(layer_weights, wires=self.wires)
+                
 
             # TODO(TR): This we have to be able to define.
             return [qml.expval(qml.PauliZ((i))) for i in self.wires]

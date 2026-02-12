@@ -48,7 +48,7 @@ from numpy.typing import NDArray
 from pennylane import numpy as np
 from pennylane.measurements import ExpectationMP
 from pennylane.operation import Operation
-from pennylane.templates import StronglyEntanglingLayers, AngleEmbedding
+from pennylane.templates import StronglyEntanglingLayers, AngleEmbedding, AmplitudeEmbedding
 from sklearn.datasets import (
     load_digits,
     make_classification,
@@ -297,6 +297,8 @@ class TestQNNBinaryClassifier(QNNCommons.TestQNNModel):
             batch_size=batch_size,
             n_epochs=self.n_epochs,
             accuracy_threshold=accuracy_threshold,
+            embedding_method=AmplitudeEmbedding,
+            embedding_kwargs={"pad_with": 0, "normalize": True, "wires": list(range(n_qubits))},
             layers=alternate_layers,
             device=self.dev,
         )
