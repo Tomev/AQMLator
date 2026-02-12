@@ -74,7 +74,12 @@ ModelOutput = TypeVar("ModelOutput", float, int)
 
 class AnsatzBuilder:
     """A class for transforming ansatz recipes, found by the :class:`aqmlator.tuner.AnsatzFinder` into
-    :mod:`pennylane`-applicable quantum ansatze."""
+    :mod:`pennylane`-applicable quantum ansatze.
+
+    .. important::
+
+        TODO(TR): Make recipe a :class:`dataclass`
+    """
 
     def __init__(
         self,
@@ -131,7 +136,7 @@ class AnsatzBuilder:
                 Feature vector representing the object for which value is being
                 predicted.
             :param weights:
-                Weights that will be optimized during the learning process.
+                Weights optimized during the learning process. We assume weights to be a flat list of parameters.
 
             .. important::
 
@@ -148,16 +153,32 @@ class AnsatzBuilder:
                     recipe["reuploaders"][i](features, **(recipe["reuploaders_kwargs"][i]))
 
                 # Add next layer
+
                 layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(recipe["wires"]))
 
-                layer_weights = weights[start_weights : start_weights + prod(layer_shape)]
+                n_layer_weights: int = prod(layer_shape)
+                layer_weights = weights[start_weights : start_weights + n_layer_weights]
                 layer_weights = layer_weights.reshape(layer_shape)
 
-                start_weights += prod(layer_shape)
+                start_weights += n_layer_weights
 
                 layer(layer_weights, wires=recipe["wires"])
 
         return ansatz
+
+    @staticmethod
+    def get_n_weights(recipe: dict[str, Any]) -> int:
+        n_weights: int = 0
+
+        for layer in recipe["layers"]:
+            layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(recipe["wires"]))
+            n_weights += prod(layer_shape)
+
+        return n_weights
+
+    @staticmethod
+    def get_weights_shape(recipe: dict[str, Any]) -> tuple[int]:
+        return (AnsatzBuilder.get_n_weights(recipe),)
 
 
 class QMLModel(abc.ABC):

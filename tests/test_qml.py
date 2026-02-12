@@ -66,7 +66,51 @@ from aqmlator.qml import (
     QNNModel,
     QuantumKernelBinaryClassifier,
     RBMClustering,
+    AnsatzBuilder,
 )
+from aqmlator.tuner import AnsatzFinder
+from optuna import Trial, Study, create_study
+
+
+class TestAnsatzBuilder(unittest.TestCase):
+    """A :class:`unittest.Testcase` for testing basic functionalities of the `aqmlator.qml.AnsatzBuilder` class.
+
+    .. warning::
+
+        As of now, this :class:`unittest.TestCase` covers only function run tests for randomized inputs. It does not
+        check if the output makes sense.
+        TODO(TR): Expand it with more tests using a fixed ansatz.
+    """
+
+    def setUp(self) -> None:
+        """Set up the tests."""
+        self.n_qubits: int = 3
+        n_layers_range: tuple[int, int] = (1, 3)
+        ansatz_finder: AnsatzFinder = AnsatzFinder(self.n_qubits, n_layers_range[0], n_layers_range[1])
+        mock_study: Study = create_study(study_name="AnsatzBuilder unittest", load_if_exists=True)
+        trial: Trial = mock_study.ask()
+        self.recipe: dict[str, Any] = ansatz_finder.suggest_ansatz(trial)
+        self.recipe["wires"] = list(range(self.n_qubits))
+
+    def test_static_circuit_construction(self) -> None:
+        """Tests :func:`AnsatzBuilder.from_recipe` run."""
+        AnsatzBuilder.from_recipe(self.recipe)
+
+    def test_instance_circuit_construction(self) -> None:
+        """Tests :func:`AnsatzBuilder.build_ansatz` run."""
+        ansatz_builder: AnsatzBuilder = AnsatzBuilder(**(self.recipe))
+        ansatz_builder.build_ansatz()
+
+    def test_n_get_weights(self) -> None:
+        """Tests if :func:`AnsatzBuilder.get_n_weights` runs without the issue."""
+        n_weights: int = AnsatzBuilder.get_n_weights(self.recipe)
+        self.assertIsInstance(n_weights, int)
+
+    def test_get_weights_shape_run(self) -> None:
+        """Tests if :func:`AnsatzBuilder.get_weights_shape` runs without the issue."""
+        n_weights: int = AnsatzBuilder.get_n_weights(self.recipe)
+        weights_shape: tuple[int] = AnsatzBuilder.get_weights_shape(self.recipe)
+        self.assertEqual(weights_shape, (n_weights,))
 
 
 class QNNCommons:
