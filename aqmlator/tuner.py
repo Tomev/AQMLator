@@ -372,8 +372,8 @@ class AnsatzFinder:
         :param trial:
             The :class:`optuna.Trial` object that will be used to solve QAS problem.
         :type trial: optuna.Trial
-        
-        :return: 
+
+        :return:
             A recipe for suggested ansatz construction.
         :rtype: dict[str, Any]
         """
