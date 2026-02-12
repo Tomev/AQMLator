@@ -372,7 +372,9 @@ class AnsatzFinder:
         :param trial:
             The :class:`optuna.Trial` object that will be used to solve QAS problem.
         :type trial: optuna.Trial
-        :return: _description_
+        
+        :return: 
+            A recipe for suggested ansatz construction.
         :rtype: dict[str, Any]
         """
         kwargs: Dict[str, Any] = {
@@ -727,7 +729,7 @@ class ModelFinder(OptunaOptimizer):
 
         qlr: float = quantum_locality_ratio(qiskit_cirtuit)
         eee: float = effective_entanglement_entropy(final_state, subsystem_qubits=subsystem_a)
-        qmi = quantum_mutual_information(final_state, subsystem_a, subsystem_b)
+        qmi: float = quantum_mutual_information(final_state, subsystem_a, subsystem_b)
 
         return avg_n_exec, qlr, eee, qmi
 
