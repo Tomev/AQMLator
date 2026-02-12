@@ -79,13 +79,29 @@ class AnsatzBuilder:
     def __init__(
         self,
         wires: Union[int, Sequence[int]],
-        embedding_method: Optional[Type[qml.operation.Operation]] = None,
-        embedding_kwargs: Optional[Dict[str, Any]] = None,
-        layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
-        reuploaders: Optional[Sequence[None | Type[qml.operation.Operation]]] = None,
-        reuploaders_kwargs: Optional[Sequence[Dict[str, Any]]] = None,
+        embedding_method: Type[qml.operation.Operation],
+        embedding_kwargs: Dict[str, Any],
+        layers: Sequence[Type[qml.operation.Operation]],
+        reuploaders: Sequence[None | Type[qml.operation.Operation]],
+        reuploaders_kwargs: Sequence[Dict[str, Any]],
     ) -> None:
-        """TODO(TR): Fill once defined."""
+        """The constructor for the :class:`AnsatzBuilder` class. In constructs an ansatz recipe from the parameters,
+        instead of storing them as members.
+
+        :param wires:
+            The wires to use in the ansatz or the number of qubits (and wires) used in the ansatz.
+        :param embedding_method:
+            Initial data embedding approach.
+        :param embedding_kwargs:
+            Keyword arguments for the embedding method.
+        :param layers:
+            Variational layers to be used in the ansatz. The layers will be applied in the given order.
+        :param reuploaders:
+            Data re-uploading layers. Data re-uploading will be applied in the given order. Each reuploading is
+            applied prior to the variational layer.
+        :param reuploaders_kwargs:
+            Keyword arguments for the data re-uploading layers.
+        """
         self.recipe: dict[str, Any] = {
             "wires": wires,
             "embedding_method": embedding_method,
@@ -186,10 +202,11 @@ class QMLModel(abc.ABC):
         :param layers:
             Layers to be used in the VQC. The layers will be applied in the given order.
             A double `StronglyEntanglingLayer` will be used if `None` is given.
-        :param reuploaders:
-            TODO(TR)
+        param reuploaders:
+            Data re-uploading layers. Data re-uploading will be applied in the given order. Each reuploading is
+            applied prior to the variational layer.
         param reuploaders_kwargs:
-            TODO(TR)
+            Keyword arguments for the data re-uploading layers.
         :param validation_set_size:
             A part of the training set that will be used for QMLModel validation.
             It should be from (0, 1).
@@ -257,32 +274,6 @@ class QMLModel(abc.ABC):
             n_qubit = len(self.wires)
 
         self.n_qubit: int = n_qubit
-
-    @staticmethod
-    def upload_data(
-        data: Union[Sequence[float], torch.Tensor],
-        uploading_constructor: qml.operation.Operation,
-        kwargs: dict[str, Any],
-    ) -> None:
-        """_summary_
-        # TODO(TR): Ugly. Refactor. Temporary...
-
-        :param data: _description_
-        :type data: _type_
-        :param uploading_constructor: _description_
-        :type uploading_constructor: _type_
-        :param kwargs: _description_
-        :type kwargs: _type_
-        :return: _description_
-        :rtype: _type_
-        """
-        if uploading_constructor is None:
-            return  # Identity
-
-        with qml.QueuingManager.stop_recording():
-            ops = qml.tape.QuantumScript(uploading_constructor(data, **kwargs).decomposition())
-        for op in ops:
-            qml.apply(op)
 
     def seed(self, new_seed: int) -> None:
         """
@@ -403,8 +394,7 @@ class QNNModel(QMLModel, abc.ABC):
         n_qubit: Optional[int] = None,
     ) -> None:
         """
-        The constructor for the `QNNModel` class.
-        TODO(TR): Add reuploaders info.
+        The constructor for the :class:`QNNModel` class.
 
         :param wires:
             The wires to use in the VQC or the number of qubits (and wires) used in the
@@ -428,6 +418,11 @@ class QNNModel(QMLModel, abc.ABC):
         :param layers:
             Layers to be used in the VQC. The layers will be applied in the given order.
             A double `StronglyEntanglingLayer` will be used if `None` is given.
+        :param reuploaders:
+            Data re-uploading layers. Data re-uploading will be applied in the given order. Each reuploading is
+            applied prior to the variational layer.
+        :param reuploaders_kwargs:
+            Keyword arguments for the data re-uploading layers.
         :param accuracy_threshold:
             The satisfactory accuracy of the model.
         :param initial_weights:
@@ -899,9 +894,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         coupling_map: Optional[Sequence[Sequence[int]]] = None,
     ) -> None:
         """
-        A constructor for the `QuantumKernelBinaryClassifier` class.
-
-        TODO(TR): Add reuploaders to the docstring
+        The constructor for the :class:`QuantumKernelBinaryClassifier` class.
 
         :param wires:
             The wires to use in the VQC or the number of qubits (and wires) used in the
@@ -925,6 +918,11 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             classifier will use the default embedding method.
         :param layers:
             A list of `layer` functions to be applied in the kernel ansatz VQC.
+        :param reuploaders:
+            Data re-uploading layers. Data re-uploading will be applied in the given order. Each reuploading is
+            applied prior to the variational layer.
+        :param reuploaders_kwargs:
+            Keyword arguments for the data re-uploading layers.
         :param initial_weights:
             The weights using which the training will start.
         :param rng_seed:
