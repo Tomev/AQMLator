@@ -256,7 +256,7 @@ class AnsatzFinder:
         :param n_max_blocks:
             The maximal number of QML blocks in the sought ansatz. Defaults to 5.
         :type n_max_blocks: int, optional
-        :param optuna_postfix: 
+        :param optuna_postfix:
             Additional information passed to the :mod:`optuna`-sampled parameters. Defaults to "".
         :type optuna_postfix: str, optional
 
@@ -264,7 +264,7 @@ class AnsatzFinder:
 
             The QML block consists of a (data uploading, weighted layer) pair. The numbers passed in the constructor
             define therefore the number of possible variational layers, and possible data (re-)uploading layers.
-            
+
         """
         self._n_min_blocks: int = 1
         self._n_max_blocks: int = 1
@@ -419,8 +419,8 @@ class AnsatzFinder:
 
             Each QML model block is a (data uploading layer, parametrized layer) pair. Since each our model starts with
             a data uplading scheme, first data re-uploading should always be an identity. This will make the processing
-            easier. 
-            
+            easier.
+
             TODO(TR): This could possibly be optimized to include the data embedding as first re-uploading.
 
         :param trial:

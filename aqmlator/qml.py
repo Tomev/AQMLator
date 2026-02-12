@@ -72,12 +72,76 @@ from qbm4eo.rbm import RBM, AnnealingRBMTrainer, CD1Trainer, RBMTrainer
 ModelOutput = TypeVar("ModelOutput", float, int)
 
 
-class CircuitBuilder:
-    """ A class for transforming ansatz recipes, found by the :class:`aqmlator.tuner.AnsatzFinder` into 
-    :mod:`pennylane`-applicable quantum ansatze. """
-    
-    def __init__(self) -> None:
-        raise NotImplementedError
+class AnsatzBuilder:
+    """A class for transforming ansatz recipes, found by the :class:`aqmlator.tuner.AnsatzFinder` into
+    :mod:`pennylane`-applicable quantum ansatze."""
+
+    def __init__(
+        self,
+        wires: Union[int, Sequence[int]],
+        embedding_method: Optional[Type[qml.operation.Operation]] = None,
+        embedding_kwargs: Optional[Dict[str, Any]] = None,
+        layers: Optional[Sequence[Type[qml.operation.Operation]]] = None,
+        reuploaders: Optional[Sequence[None | Type[qml.operation.Operation]]] = None,
+        reuploaders_kwargs: Optional[Sequence[Dict[str, Any]]] = None,
+    ) -> None:
+        """TODO(TR): Fill once defined."""
+        self.recipe: dict[str, Any] = {
+            "wires": wires,
+            "embedding_method": embedding_method,
+            "embedding_kwargs": embedding_kwargs,
+            "layers": layers,
+            "reuploaders": reuploaders,
+            "reuploaders_kwargs": reuploaders_kwargs,
+        }
+
+    def build_ansatz(self) -> callable:
+        """TODO(TR): Fill once working"""
+        return self.from_recipe(self.recipe)
+
+    @staticmethod
+    def from_recipe(recipe: dict[str, Any]) -> callable:
+        """TODO(TR): Fill once working."""
+
+        def ansatz(
+            features: Union[Sequence[float], torch.Tensor],
+            weights: Union[np.ndarray, torch.Tensor],
+        ) -> None:
+            """
+            Returns the expectation value of the first qubit of the VQC of which the
+            weights are optimized during the learning process.
+
+            :param features:
+                Feature vector representing the object for which value is being
+                predicted.
+            :param weights:
+                Weights that will be optimized during the learning process.
+
+            .. important::
+
+                Notice that the ansatz returns nothing! This way it can be used both in QNN and QEK models.
+            """
+            # Initial data embedding
+            recipe["embedding_method"](features, **(recipe["embedding_kwargs"]))
+
+            start_weights: int = 0
+
+            for i, layer in enumerate(recipe["layers"]):
+                # Add next data reuploading
+                if recipe["reuploaders"][i] is not None:
+                    recipe["reuploaders"][i](features, **(recipe["reuploaders_kwargs"][i]))
+
+                # Add next layer
+                layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(recipe["wires"]))
+
+                layer_weights = weights[start_weights : start_weights + prod(layer_shape)]
+                layer_weights = layer_weights.reshape(layer_shape)
+
+                start_weights += prod(layer_shape)
+
+                layer(layer_weights, wires=recipe["wires"])
+
+        return ansatz
 
 
 class QMLModel(abc.ABC):
@@ -436,6 +500,16 @@ class QNNModel(QMLModel, abc.ABC):
         :rtype: qml.QNode
         """
 
+        ansatz_builder: AnsatzBuilder = AnsatzBuilder(
+            self.wires,
+            self._embedding_method,
+            self._embedding_kwargs,
+            self._layers,
+            self._reuploaders,
+            self._reuploaders_kwargs,
+        )
+        ansatz: callable = ansatz_builder.build_ansatz()
+
         def circuit(
             inputs: Union[Sequence[float], torch.Tensor],
             weights: Union[np.ndarray, torch.Tensor],
@@ -447,38 +521,19 @@ class QNNModel(QMLModel, abc.ABC):
             :param inputs:
                 Feature vector representing the object for which value is being
                 predicted.
-
-                :note:
-                This argument needs to be named `inputs` for torch to be able to use
-                the `circuit` method.
             :param weights:
                 Weights that will be optimized during the learning process.
+
+            .. important::
+
+                First argument needs to be named ``inputs`` for :mod:`torch` to be able to use
+                the :func:`circuit` function..
 
             :return:
                 The expectation value (from range [-1, 1]) of the measurement in the
                 computational basis of given circuit.
             """
-            self._embedding_method(inputs, **(self._embedding_kwargs))
-
-            start_weights: int = 0
-
-            for i, layer in enumerate(self._layers):
-                # Add next data reuploading
-                if self._reuploaders[i] is not None:
-                    self._reuploaders[i](inputs, **(self._reuploaders_kwargs[i]))
-
-                # Add next layer
-                layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(self.wires))
-
-                layer_weights = weights[start_weights : start_weights + prod(layer_shape)]
-
-                start_weights += prod(layer_shape)
-
-                layer_weights = layer_weights.reshape(layer_shape)
-            
-                layer(layer_weights, wires=self.wires)
-                
-
+            ansatz(inputs, weights)
             # TODO(TR): This we have to be able to define.
             return [qml.expval(qml.PauliZ((i))) for i in self.wires]
 
@@ -939,28 +994,16 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         :param features:
             Feature vector representing the object that is being classified.
         """
-
-        start_weights: int = 0
-
-        # Initial data upload.
-        self.upload_data(features, self._embedding_method, self._embedding_kwargs)
-
-        for i, layer in enumerate(self._layers):
-            assert i >= 0
-            # self.upload_data(features, self._embedding_method, self._embedding_kwargs)
-            self.upload_data(features, self._reuploaders[i], self._reuploaders_kwargs[i])
-            # TODO(TR): Initially we had data uploading in the loop. Why? For reuploading?
-            layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(self.wires))
-
-            layer_weights = weights[start_weights : start_weights + prod(layer_shape)]
-            start_weights += prod(layer_shape)
-            layer_weights = np.array(layer_weights).reshape(layer_shape)
-
-            with qml.QueuingManager.stop_recording():
-                ops = qml.tape.QuantumScript(layer(layer_weights, wires=self.wires).decomposition())
-
-            for op in ops:
-                qml.apply(op)
+        ansatz_builder = AnsatzBuilder(
+            self.wires,
+            self._embedding_method,
+            self._embedding_kwargs,
+            self._layers,
+            self._reuploaders,
+            self._reuploaders_kwargs,
+        )
+        ansatz: callable = ansatz_builder.build_ansatz()
+        return ansatz(features, weights)
 
     def _create_transform(
         self,
