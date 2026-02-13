@@ -13,7 +13,7 @@ publish-url = "https://test.pypi.org/legacy/"
 explicit = true
 
 [tool.uv.sources]
-qmetric = { git = "ssh://git@gitlab.com/illesova.silvie.scholar/qmetric.git" }
+qmetric = { git = "ssh://git@gitlab.com/illesova.silvie.scholar/qmetric.git", branch = "tr_pennylane" }
 
 [tool.deptry.package_module_name_map]
 fastapi = "fastapi"
