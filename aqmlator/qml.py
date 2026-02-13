@@ -84,6 +84,7 @@ class AnsatzBuilder:
     def __init__(
         self,
         wires: Union[int, Sequence[int]],
+        *,
         embedding_method: Type[qml.operation.Operation],
         embedding_kwargs: Dict[str, Any],
         layers: Sequence[Type[qml.operation.Operation]],
@@ -116,12 +117,12 @@ class AnsatzBuilder:
             "reuploaders_kwargs": reuploaders_kwargs,
         }
 
-    def build_ansatz(self) -> callable:
+    def build_ansatz(self) -> Callable[..., Any]:
         """TODO(TR): Fill once working"""
         return self.from_recipe(self.recipe)
 
     @staticmethod
-    def from_recipe(recipe: dict[str, Any]) -> callable:
+    def from_recipe(recipe: dict[str, Any]) -> Callable[..., Any]:
         """TODO(TR): Fill once working."""
 
         def ansatz(
@@ -142,8 +143,9 @@ class AnsatzBuilder:
 
                 Notice that the ansatz returns nothing! This way it can be used both in QNN and QEK models.
             """
-            # Initial data embedding
+            # Initial data embedding. Can be StatePreparation, so we decompose it.
             recipe["embedding_method"](features, **(recipe["embedding_kwargs"]))
+
 
             start_weights: int = 0
 
@@ -168,10 +170,12 @@ class AnsatzBuilder:
 
     @staticmethod
     def get_n_weights(recipe: dict[str, Any]) -> int:
+        """TODO(TR): Fill once working"""
         n_weights: int = 0
+        n_wires: int = len(recipe["wires"])
 
         for layer in recipe["layers"]:
-            layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(recipe["wires"]))
+            layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=n_wires)
             n_weights += prod(layer_shape)
 
         return n_weights
@@ -517,14 +521,14 @@ class QNNModel(QMLModel, abc.ABC):
         """
 
         ansatz_builder: AnsatzBuilder = AnsatzBuilder(
-            self.wires,
-            self._embedding_method,
-            self._embedding_kwargs,
-            self._layers,
-            self._reuploaders,
-            self._reuploaders_kwargs,
+            wires=self.wires,
+            embedding_method=self._embedding_method,
+            embedding_kwargs=self._embedding_kwargs,
+            layers=self._layers,
+            reuploaders=self._reuploaders,
+            reuploaders_kwargs=self._reuploaders_kwargs,
         )
-        ansatz: callable = ansatz_builder.build_ansatz()
+        ansatz: Callable[..., Any] = ansatz_builder.build_ansatz()
 
         def circuit(
             inputs: Union[Sequence[float], torch.Tensor],
@@ -1014,14 +1018,14 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             Feature vector representing the object that is being classified.
         """
         ansatz_builder = AnsatzBuilder(
-            self.wires,
-            self._embedding_method,
-            self._embedding_kwargs,
-            self._layers,
-            self._reuploaders,
-            self._reuploaders_kwargs,
+            wires=self.wires,
+            embedding_method=self._embedding_method,
+            embedding_kwargs=self._embedding_kwargs,
+            layers=self._layers,
+            reuploaders=self._reuploaders,
+            reuploaders_kwargs=self._reuploaders_kwargs,
         )
-        ansatz: callable = ansatz_builder.build_ansatz()
+        ansatz: Callable[..., Any] = ansatz_builder.build_ansatz()
         return ansatz(features, weights)
 
     def _create_transform(

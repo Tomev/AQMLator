@@ -90,7 +90,6 @@ class TestAnsatzBuilder(unittest.TestCase):
         mock_study: Study = create_study(study_name="AnsatzBuilder unittest", load_if_exists=True)
         trial: Trial = mock_study.ask()
         self.recipe: dict[str, Any] = ansatz_finder.suggest_ansatz(trial)
-        self.recipe["wires"] = list(range(self.n_qubits))
 
     def test_static_circuit_construction(self) -> None:
         """Tests :func:`AnsatzBuilder.from_recipe` run."""

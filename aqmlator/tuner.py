@@ -39,7 +39,6 @@ from math import ceil, floor, prod, sqrt
 from os import environ
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Type, Union
 
-import qiskit
 import optuna
 import pennylane as qml
 import pennylane.numpy as np
@@ -67,9 +66,7 @@ from aqmlator.qml import (
     RBMClustering,
 )
 
-from pennylane_qiskit.converter import circuit_to_qiskit
-from qiskit.quantum_info import Statevector
-from qmetric.quantum_circuit_metrics import (
+from qmetric.pennylane.quantum_circuit_metrics import (
     quantum_locality_ratio,
     effective_entanglement_entropy,
     quantum_mutual_information,
@@ -171,6 +168,15 @@ reuploading_types: Dict[str, Dict[str, Any]] = {
     },
     "IDENTITY": {"constructor": None, "kwargs": {}, "fixed_kwargs": {}},
 }
+
+
+def compute_qc_metrics(pennylane_circuit: qml.QNode) -> dict[str, float]:
+    """TODO(TR): Fill this! Computes and returns selected QC metrics."""
+    return {
+        "qlr": float(quantum_locality_ratio(pennylane_circuit)),
+        "eee": float(effective_entanglement_entropy(pennylane_circuit)),
+        "qmi": float(quantum_mutual_information(pennylane_circuit)),
+    }
 
 
 class MLTaskType(StrEnum):
@@ -378,7 +384,7 @@ class AnsatzFinder:
         :rtype: dict[str, Any]
         """
         kwargs: Dict[str, Any] = {
-            "wires": self.n_wires,
+            "wires": tuple(range(self.n_wires)),
             "n_layers": trial.suggest_int(
                 "n_layers" + self._optuna_postfix,
                 self.n_min_blocks,
@@ -405,7 +411,7 @@ class AnsatzFinder:
 
         kwargs["embedding_method"] = data_embeddings[embedding_type]["constructor"]
 
-        embedding_kwargs: Dict[str, Any] = {"wires": range(kwargs["wires"])}
+        embedding_kwargs: Dict[str, Any] = {"wires": kwargs["wires"]}
 
         embedding_kwargs.update(data_embeddings[embedding_type]["fixed_kwargs"])
 
@@ -445,7 +451,7 @@ class AnsatzFinder:
                 f"reuploader_{i + 1}{self._optuna_postfix}", list(reuploading_types)
             )
             reuploaders.append(reuploading_types[reuploader_type]["constructor"])
-            reuploaders_kwargs.append({"wires": range(kwargs["wires"])})
+            reuploaders_kwargs.append({"wires": kwargs["wires"]})
 
             # TODO(TR): For now, only categorical are allowed, if any. This class needs a dire refactor anyway.
             for kwarg in list(reuploading_types[reuploader_type]["kwargs"]):
@@ -718,20 +724,9 @@ class ModelFinder(OptunaOptimizer):
         if isinstance(model, QNNClassifier):
             return avg_n_exec, 0, 0, 0
 
-        pennylane_circuit: qml.QNode = model.create_circuit()
-        tape: qml.tape.QuantumScript = qml.tape.make_qscript(pennylane_circuit)(self._x[0], np.array(model.weights))
-        qiskit_cirtuit: qiskit.QuantumCircuit = circuit_to_qiskit(tape, model.n_qubit)
-        qiskit_cirtuit.remove_final_measurements()
+        qc_metrics: dict[str, float] = compute_qc_metrics(model.create_circuit())
 
-        final_state = Statevector.from_instruction(qiskit_cirtuit)
-        subsystem_a: List[int] = list(range(model.n_qubit // 2))
-        subsystem_b: List[int] = list(range(model.n_qubit // 2, model.n_qubit))
-
-        qlr: float = quantum_locality_ratio(qiskit_cirtuit)
-        eee: float = effective_entanglement_entropy(final_state, subsystem_qubits=subsystem_a)
-        qmi: float = quantum_mutual_information(final_state, subsystem_a, subsystem_b)
-
-        return avg_n_exec, qlr, eee, qmi
+        return avg_n_exec, qc_metrics["qlr"], qc_metrics["eee"], qc_metrics["qmi"]
 
     def _classification_objective_function(self, trial: optuna.trial.Trial) -> Tuple[float, float, float, float]:
         """
@@ -985,17 +980,6 @@ class HyperparameterTuner(OptunaOptimizer):
 
         avg_n_exec: float = tracker.totals["executions"] / self._n_seeds
 
-        pennylane_circuit: qml.QNode = self._model.create_circuit()
-        tape: qml.tape.QuantumScript = qml.tape.make_qscript(pennylane_circuit)(self._x[0], self._model.weights)
-        qiskit_cirtuit: qiskit.QuantumCircuit = circuit_to_qiskit(tape, self._model.n_qubit)
-        qiskit_cirtuit.remove_final_measurements()
+        qc_metrics: dict[str, float] = compute_qc_metrics(self._model.create_circuit())
 
-        final_state = Statevector.from_instruction(qiskit_cirtuit)
-        subsystem_a: List[int] = list(range(self._model.n_qubit // 2))
-        subsystem_b: List[int] = list(range(self._model.n_qubit // 2, self._model.n_qubit))
-
-        qlr: float = quantum_locality_ratio(qiskit_cirtuit)
-        eee: float = effective_entanglement_entropy(final_state, subsystem_qubits=subsystem_a)
-        qmi = quantum_mutual_information(final_state, subsystem_a, subsystem_b)
-
-        return avg_n_exec, qlr, eee, qmi
+        return avg_n_exec, qc_metrics["qlr"], qc_metrics["eee"], qc_metrics["qmi"]
