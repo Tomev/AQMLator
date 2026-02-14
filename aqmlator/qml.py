@@ -48,12 +48,13 @@ from typing import (
     Union,
 )
 
+import numpy as np
 import pennylane as qml
 import torch
 from dimod.core.sampler import Sampler
 from lightning.pytorch.trainer import Trainer
 from numpy.typing import NDArray
-from pennylane import numpy as np
+from pennylane import numpy as pnp
 from pennylane.kernels import target_alignment
 from pennylane.optimize import GradientDescentOptimizer, NesterovMomentumOptimizer
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
@@ -118,7 +119,21 @@ class AnsatzBuilder:
         }
 
     def build_ansatz(self) -> Callable[..., Any]:
-        """TODO(TR): Fill once working"""
+        """Builds the ansatz from the provided recipe.
+
+        The method constructs a quantum circuit ansatz based on the given recipe, which includes
+        the embedding method, reuploaders, and variational layers. This ansatz can then be used
+        in quantum neural networks or quantum kernel methods.
+
+        :param features:
+            Feature vector representing the object for which value is being predicted.
+        :param weights:
+            Weights optimized during the learning process. We assume weights to be a flat list of parameters.
+
+        .. important::
+
+            Notice that the ansatz returns nothing! This way it can be used both in QNN and QEK models.
+        """
         return self.from_recipe(self.recipe)
 
     @staticmethod
@@ -126,8 +141,8 @@ class AnsatzBuilder:
         """TODO(TR): Fill once working."""
 
         def ansatz(
-            features: Union[Sequence[float], torch.Tensor],
-            weights: Union[np.ndarray, torch.Tensor],
+            features: Sequence[float] | torch.Tensor,
+            weights: NDArray[np.floating] | torch.Tensor,
         ) -> None:
             """
             Returns the expectation value of the first qubit of the VQC of which the
@@ -145,7 +160,6 @@ class AnsatzBuilder:
             """
             # Initial data embedding. Can be StatePreparation, so we decompose it.
             recipe["embedding_method"](features, **(recipe["embedding_kwargs"]))
-
 
             start_weights: int = 0
 
@@ -312,7 +326,7 @@ class QMLModel(abc.ABC):
     @abc.abstractmethod
     def fit(
         self,
-        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        X: Union[Sequence[Sequence[float]], NDArray[pnp.float64]],
         y: Optional[Sequence[ModelOutput]],
     ) -> "QMLModel":
         """
@@ -349,7 +363,7 @@ class QMLModel(abc.ABC):
 
     def _split_data_for_training(
         self,
-        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        X: Union[Sequence[Sequence[float]], NDArray[pnp.float64]],
         y: Sequence[ModelOutput],
     ) -> None:
         """
@@ -372,6 +386,20 @@ class QMLModel(abc.ABC):
             test_size=self._validation_set_size,
             random_state=self._rng_seed,
         )
+
+    @abc.abstractmethod
+    def create_ansatz(self) -> qml.QNode:
+        """TODO TR
+
+        Remember, no measurement!
+
+        :param interface: _description_, defaults to "autograd"
+        :type interface: str, optional
+        :raises NotImplementedError: _description_
+        :return: _description_
+        :rtype: qml.QNode
+        """
+        raise NotImplementedError
 
     @abc.abstractmethod
     def create_circuit(self, interface: str = "autograd") -> qml.QNode:
@@ -493,7 +521,7 @@ class QNNModel(QMLModel, abc.ABC):
             self._weights_length += prod(layer.shape(n_layers=1, n_wires=len(self.wires)))
 
         if initial_weights is None or len(initial_weights) != self._weights_length:
-            initial_weights = [np.pi * self._rng.random() for _ in range(self._weights_length)]
+            initial_weights = [pnp.pi * self._rng.random() for _ in range(self._weights_length)]
 
         self.weights = initial_weights
 
@@ -508,6 +536,32 @@ class QNNModel(QMLModel, abc.ABC):
             prediction_function
         )
 
+    def create_ansatz(self) -> qml.QNode:
+        """TODO TR
+
+        Remember, no measurement!
+
+        :param interface: _description_, defaults to "autograd"
+        :type interface: str, optional
+        :raises NotImplementedError: _description_
+        :return: _description_
+        :rtype: qml.QNode
+        """
+        ansatz_builder = AnsatzBuilder(
+            wires=self.wires,
+            embedding_method=self._embedding_method,
+            embedding_kwargs=self._embedding_kwargs,
+            layers=self._layers,
+            reuploaders=self._reuploaders,
+            reuploaders_kwargs=self._reuploaders_kwargs,
+        )
+        ansatz: Callable[..., Any] = ansatz_builder.build_ansatz()
+
+        if self.coupling_map:
+            ansatz = transpile(ansatz, coupling_map=self.coupling_map)
+
+        return qml.QNode(ansatz, self.dev)
+
     def create_circuit(self, interface: str = "autograd") -> qml.QNode:
         """Creates a `qml.QNode`.
 
@@ -519,20 +573,11 @@ class QNNModel(QMLModel, abc.ABC):
         :return: _description_
         :rtype: qml.QNode
         """
-
-        ansatz_builder: AnsatzBuilder = AnsatzBuilder(
-            wires=self.wires,
-            embedding_method=self._embedding_method,
-            embedding_kwargs=self._embedding_kwargs,
-            layers=self._layers,
-            reuploaders=self._reuploaders,
-            reuploaders_kwargs=self._reuploaders_kwargs,
-        )
-        ansatz: Callable[..., Any] = ansatz_builder.build_ansatz()
+        ansatz: qml.QNode = self.create_ansatz()
 
         def circuit(
             inputs: Union[Sequence[float], torch.Tensor],
-            weights: Union[np.ndarray, torch.Tensor],
+            weights: Union[pnp.ndarray, torch.Tensor],
         ) -> Sequence[float]:
             """
             Returns the expectation value of the first qubit of the VQC of which the
@@ -553,7 +598,7 @@ class QNNModel(QMLModel, abc.ABC):
                 The expectation value (from range [-1, 1]) of the measurement in the
                 computational basis of given circuit.
             """
-            ansatz(inputs, weights)
+            ansatz.func(inputs, weights)
             # TODO(TR): This we have to be able to define.
             return [qml.expval(qml.PauliZ((i))) for i in self.wires]
 
@@ -562,7 +607,7 @@ class QNNModel(QMLModel, abc.ABC):
 
         return qml.QNode(circuit, self.dev, interface=interface)
 
-    def get_circuit_expectation_values(self, features_lists: Sequence[Sequence[float]]) -> np.ndarray:
+    def get_circuit_expectation_values(self, features_lists: Sequence[Sequence[float]]) -> pnp.ndarray:
         """
         Computes and returns the expectation value of the `PauliZ` measurement of the
         first qubit of the VQC.
@@ -581,9 +626,9 @@ class QNNModel(QMLModel, abc.ABC):
         expectation_values: List[Sequence[float]] = []
 
         for features in features_lists:
-            expectation_values.append(self.circuit(features, np.array(self.weights)))
+            expectation_values.append(self.circuit(features, pnp.array(self.weights)))
 
-        return np.array(expectation_values)
+        return pnp.array(expectation_values)
 
     @abc.abstractmethod
     def _cost(
@@ -626,7 +671,7 @@ class QNNModel(QMLModel, abc.ABC):
 
     def fit(
         self,
-        X: Union[Sequence[Sequence[float]], NDArray[np.float64]],
+        X: Union[Sequence[Sequence[float]], NDArray[pnp.float64]],
         y: Optional[Sequence[ModelOutput]],
     ) -> "QNNModel":
         """
@@ -661,14 +706,14 @@ class QNNModel(QMLModel, abc.ABC):
 
         n_batches: int = max(1, len(X) // self._batch_size)
 
-        feature_batches = np.array_split(np.arange(len(self._training_X)), n_batches)
+        feature_batches = pnp.array_split(pnp.arange(len(self._training_X)), n_batches)
 
         best_weights: Sequence[float] = self.weights
         best_accuracy: float = self.score(self._validation_X, self._validation_y)
 
-        self.weights = np.array(self.weights, requires_grad=True)
+        self.weights = pnp.array(self.weights, requires_grad=True)
         cost: float
-        batch_indices: np.tensor  # Of ints.
+        batch_indices: pnp.tensor  # Of ints.
 
         def _batch_cost(weights: Sequence[float]) -> float:
             """
@@ -825,9 +870,9 @@ class QNNBinaryClassifier(ClassifierMixin, QNNModel):
 
         self.circuit = self.create_circuit()
 
-        expectation_values: np.ndarray = np.array([self.circuit(x, weights)[0] for x in X])
+        expectation_values: pnp.ndarray = pnp.array([self.circuit(x, weights)[0] for x in X])
 
-        return np.mean((expectation_values - np.array(y)) ** 2)
+        return pnp.mean((expectation_values - pnp.array(y)) ** 2)
 
     def _default_prediction_function(self, circuit_outputs: Sequence[Sequence[float]]) -> Sequence[ModelOutput]:
         """
@@ -870,11 +915,11 @@ class QNNLinearRegression(RegressorMixin, QNNModel):
 
         expected_values = [self.circuit(x, weights) for x in X]
 
-        predicted_values: np.ndarray = np.array(
-            [sum(np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x) for x in expected_values]
+        predicted_values: pnp.ndarray = pnp.array(
+            [sum(pnp.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x) for x in expected_values]
         )
 
-        return np.mean(predicted_values - np.array(y) ** 2)
+        return pnp.mean(predicted_values - pnp.array(y) ** 2)
 
     def _default_prediction_function(self, circuit_outputs: Sequence[Sequence[float]]) -> Sequence[ModelOutput]:
         """
@@ -887,7 +932,7 @@ class QNNLinearRegression(RegressorMixin, QNNModel):
             Returns classification prediction value for the given problem.
         """
         predicted_values: List[ModelOutput] = [
-            sum(np.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x) for x in circuit_outputs
+            sum(pnp.log(((i + 1) / 2) / (1 - ((i + 1) / 2))) for i in x) for x in circuit_outputs
         ]
 
         return predicted_values
@@ -995,27 +1040,22 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
         if initial_weights is None or len(initial_weights) != self._weights_length:
             initial_weights = [np.pi * self._rng.random() for _ in range(self._weights_length)]
 
-        self.weights = np.array(initial_weights, requires_grad=True)
+        self.weights = pnp.array(initial_weights, requires_grad=True)
 
         self._debug_flag: bool = debug_flag
 
         self._classifier: SVC = SVC()
 
-    def _ansatz(
-        self,
-        features: Sequence[float],
-        weights: Sequence[float],
-    ) -> None:
-        """
-        A VQC ansatz that will be used in defining the quantum kernel function.
+    def create_ansatz(self) -> qml.QNode:
+        """TODO TR
 
-        :note:
-            Templates expanding is necessary for the transpiling!
+        Remember, no measurement!
 
-        :param weights:
-            Weights that will be optimized during the learning process.
-        :param features:
-            Feature vector representing the object that is being classified.
+        :param interface: _description_, defaults to "autograd"
+        :type interface: str, optional
+        :raises NotImplementedError: _description_
+        :return: _description_
+        :rtype: qml.QNode
         """
         ansatz_builder = AnsatzBuilder(
             wires=self.wires,
@@ -1026,7 +1066,29 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             reuploaders_kwargs=self._reuploaders_kwargs,
         )
         ansatz: Callable[..., Any] = ansatz_builder.build_ansatz()
-        return ansatz(features, weights)
+
+        if self.coupling_map:
+            ansatz = transpile(ansatz, coupling_map=self.coupling_map)
+
+        return qml.QNode(ansatz, self.dev)
+
+    def _ansatz(
+        self,
+        features: Sequence[float],
+        weights: Sequence[float],
+    ) -> None:
+        """
+        A call the VQC ansatz that will be used in defining the quantum kernel function.
+
+        :note:
+            Templates expanding is necessary for the transpiling!
+
+        :param features:
+            Feature vector representing the object that is being classified.
+        :param weights:
+            Weights that will be optimized during the learning process.
+        """
+        return self.create_ansatz().func(features, weights)
 
     def _create_transform(
         self,
@@ -1143,7 +1205,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             """
 
             # The `np.array` casting is required so that indexing is "legal".
-            return np.array(kernel_circuit(weights, first_features, second_features))[0]
+            return pnp.array(kernel_circuit(weights, first_features, second_features))[0]
 
         return kernel
 
@@ -1222,7 +1284,7 @@ class QuantumKernelBinaryClassifier(QMLModel, ClassifierMixin):
             """
 
             # Choose subset of datapoints to compute the KTA on.
-            subset: np.ndarray = np.array(self._rng.sample(list(range(len(self._training_X))), self._kta_subset_size))
+            subset: pnp.ndarray = pnp.array(self._rng.sample(list(range(len(self._training_X))), self._kta_subset_size))
 
             return -target_alignment(
                 list(self._training_X[subset]),
@@ -1300,6 +1362,18 @@ class QNNClassifier(QMLModel, ClassifierMixin):
     This class implements a quantum classifier based on the multiple binary quantum
     classifiers.
     """
+
+    def create_ansatz(self) -> qml.QNode:
+        """TODO
+
+        placeholder to be refactored
+
+        :param interface: _description_, defaults to "autograd"
+        :type interface: str, optional
+        :return: _description_
+        :rtype: qml.QNode
+        """
+        return qml.QNode(None)
 
     def create_circuit(self, interface: str = "autograd") -> qml.QNode:
         """TODO
@@ -1466,19 +1540,19 @@ class QNNClassifier(QMLModel, ClassifierMixin):
             raise AttributeError("Missing y in supervised learning model.")
 
         # Check if there's a binary classifier for each class.
-        unique_classes: np.ndarray = np.unique(y)
+        unique_classes: pnp.ndarray = pnp.unique(y)
 
         if len(unique_classes) > len(self._binary_classifiers):
             raise AssertionError("Numbers of provided binary classifiers and classes don't match!")
 
-        binary_classifier_accuracy_threshold: float = np.sqrt(self.accuracy_threshold)
+        binary_classifier_accuracy_threshold: float = pnp.sqrt(self.accuracy_threshold)
 
         for classifier in self._binary_classifiers:
             classifier.accuracy_threshold = binary_classifier_accuracy_threshold
 
         # Fit each binary classifier to its respective class.
         for i in range(len(self._binary_classifiers)):
-            classifier_classes = np.array(y)
+            classifier_classes = pnp.array(y)
             classifier_classes[classifier_classes != unique_classes[i]] = -1
             classifier_classes[classifier_classes == unique_classes[i]] = 1
 

@@ -52,10 +52,10 @@ from pennylane.optimize import (
 )
 from pennylane.templates.embeddings import AmplitudeEmbedding, AngleEmbedding
 from pennylane.templates.layers import BasicEntanglerLayers, StronglyEntanglingLayers
+from qmetric.quantum_circuit_metrics import QCMPennyLane
 from sklearn.metrics import silhouette_score  # TR: It has bounds.
 from torch import Tensor
 from torch.utils.data import DataLoader
-
 
 from aqmlator.qml import (
     QMLModel,
@@ -64,12 +64,6 @@ from aqmlator.qml import (
     QNNLinearRegression,
     QuantumKernelBinaryClassifier,
     RBMClustering,
-)
-
-from qmetric.pennylane.quantum_circuit_metrics import (
-    quantum_locality_ratio,
-    effective_entanglement_entropy,
-    quantum_mutual_information,
 )
 
 # TODO TR:  Should those be global?
@@ -171,11 +165,27 @@ reuploading_types: Dict[str, Dict[str, Any]] = {
 
 
 def compute_qc_metrics(pennylane_circuit: qml.QNode) -> dict[str, float]:
-    """TODO(TR): Fill this! Computes and returns selected QC metrics."""
+    """
+    TODO(TR): Make it uniform with the rest.
+
+    Computes and returns selected quantum circuit (QC) metrics for the given PennyLane quantum circuit.
+
+    The following metrics are computed:
+
+    - **Quantum Locality Ratio (QLR):** Measures the ratio of local to non-local operations in the circuit.
+    - **Effective Entanglement Entropy (EEE):** Quantifies the amount of entanglement in the circuit.
+    - **Quantum Mutual Information (QMI):** Measures the mutual information between different parts of the quantum system.
+
+    Args:
+        pennylane_circuit (qml.QNode): A PennyLane quantum node representing the quantum circuit.
+
+    Returns:
+        dict[str, float]: A dictionary containing the computed QC metrics.
+    """
     return {
-        "qlr": float(quantum_locality_ratio(pennylane_circuit)),
-        "eee": float(effective_entanglement_entropy(pennylane_circuit)),
-        "qmi": float(quantum_mutual_information(pennylane_circuit)),
+        "qlr": QCMPennyLane.quantum_locality_ratio(pennylane_circuit),
+        "eee": QCMPennyLane.effective_entanglement_entropy(pennylane_circuit),
+        "qmi": QCMPennyLane.quantum_mutual_information(pennylane_circuit),
     }
 
 
@@ -724,7 +734,7 @@ class ModelFinder(OptunaOptimizer):
         if isinstance(model, QNNClassifier):
             return avg_n_exec, 0, 0, 0
 
-        qc_metrics: dict[str, float] = compute_qc_metrics(model.create_circuit())
+        qc_metrics: dict[str, float] = compute_qc_metrics(model.create_ansatz())
 
         return avg_n_exec, qc_metrics["qlr"], qc_metrics["eee"], qc_metrics["qmi"]
 
@@ -980,6 +990,6 @@ class HyperparameterTuner(OptunaOptimizer):
 
         avg_n_exec: float = tracker.totals["executions"] / self._n_seeds
 
-        qc_metrics: dict[str, float] = compute_qc_metrics(self._model.create_circuit())
+        qc_metrics: dict[str, float] = compute_qc_metrics(self._model.create_ansatz())
 
         return avg_n_exec, qc_metrics["qlr"], qc_metrics["eee"], qc_metrics["qmi"]
