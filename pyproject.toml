@@ -63,7 +63,7 @@ dependencies = [
     "optuna>=4.6.0",
     "pennylane>=0.43.1",
     "pennylane-lightning>=0.43.0",
-    "psycopg2>=2.9.11",
+    "psycopg2-binary>=2.9.11",
     "qiskit-aer>=0.17.2",
     "qmetric",
     "ruff>=0.14.9",
