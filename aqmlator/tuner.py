@@ -57,7 +57,8 @@ from sklearn.metrics import silhouette_score  # TR: It has bounds.
 from torch import Tensor
 from torch.utils.data import DataLoader
 
-from aqmlator.qml import (
+from aqmlator.qml.layers import BellmanLayer, SimplifiedTwoDesign
+from aqmlator.qml.models import (
     QMLModel,
     QNNBinaryClassifier,
     QNNClassifier,
@@ -151,6 +152,10 @@ layer_types: Dict[str, Dict[str, Any]] = {
     "STRONGLY_ENTANGLING": {
         "constructor": StronglyEntanglingLayers,
     },
+    "SIMPLIFIED_TWO_DESIGN": {
+        "constructor": SimplifiedTwoDesign,
+    },
+    "BELLMAN": {"constructor": BellmanLayer},
 }
 
 
@@ -382,17 +387,22 @@ class AnsatzFinder:
 
         self._n_max_blocks = n_max_blocks
 
-    def suggest_ansatz(self, trial: optuna.Trial) -> dict[str, Any]:
+    def suggest_ansatz(self, trial: optuna.Trial | None = None) -> dict[str, Any]:
         """Using given :class:`optuna.Trial` object, propose a recipe for an ansatz to test.
 
         :param trial:
-            The :class:`optuna.Trial` object that will be used to solve QAS problem.
+            The :class:`optuna.Trial` object that will be used to solve QAS problem. If `None` given, a new trial
+            will be created.
         :type trial: optuna.Trial
 
         :return:
             A recipe for suggested ansatz construction.
         :rtype: dict[str, Any]
         """
+        if trial is None:
+            mock_study: optuna.Study = optuna.create_study()
+            trial = mock_study.ask()
+
         kwargs: Dict[str, Any] = {
             "wires": tuple(range(self.n_wires)),
             "n_layers": trial.suggest_int(

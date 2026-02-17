@@ -20,14 +20,11 @@ from typing import Any, Dict, Tuple
 import torch
 from lightning.pytorch.core import LightningModule
 from lightning.pytorch.utilities.types import OptimizerLRScheduler
-
-
 from torch import Tensor
 from torch.optim import Adam
 
 from .decoder import LBAEDecoder
 from .encoder import LBAEEncoder
-
 
 # configure logging at the root level of Lightning
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
@@ -143,7 +140,7 @@ class LBAE(LightningModule):
         xr: Tensor = self.forward(x)
         loss_value: Tensor = loss(xr.view(x.size()), x)
 
-        self.log("loss", loss_value, logger=True)
+        self.log("loss", loss_value, logger=False)
 
         return loss_value
 

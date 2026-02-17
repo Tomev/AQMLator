@@ -4,10 +4,10 @@ forever to run.
 
 import os
 import unittest
+import warnings
 from typing import List, Optional, Sequence, Type
 
 import pennylane as qml
-import warnings
 from numpy.random import RandomState
 from pennylane.operation import Operation
 from pennylane.templates import StronglyEntanglingLayers
@@ -17,7 +17,7 @@ from sklearn.datasets import (
     make_regression,
 )
 
-from aqmlator.qml import (
+from aqmlator.qml.models import (
     QNNBinaryClassifier,
     QNNLinearRegression,
     QuantumKernelBinaryClassifier,

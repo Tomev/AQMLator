@@ -170,15 +170,14 @@ class AnsatzBuilder:
 
                 # Add next layer
 
-                layer_shape: Tuple[int, ...] = layer.shape(n_layers=1, n_wires=len(recipe["wires"]))
-
+                layer_shape: tuple[int] = layer.shape(n_layers=1, n_wires=len(recipe["wires"]))
                 n_layer_weights: int = prod(layer_shape)
                 layer_weights = weights[start_weights : start_weights + n_layer_weights]
                 layer_weights = layer_weights.reshape(layer_shape)
 
                 start_weights += n_layer_weights
 
-                layer(layer_weights, wires=recipe["wires"])
+                layer(weights=layer_weights, wires=recipe["wires"])
 
         return ansatz
 
@@ -1651,6 +1650,9 @@ class RBMClustering:
             deterministic=True,
             enable_progress_bar=False,
             enable_model_summary=False,
+            enable_checkpointing=False,
+            enable_autolog_hparams=False,
+            logger=False,
         )
 
         lbae_trainer.fit(self.lbae, data_loader)

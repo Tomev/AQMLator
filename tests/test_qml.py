@@ -34,7 +34,7 @@ __author__ = "Tomasz Rybotycki"
 import abc
 import os
 import unittest
-from typing import List, Sequence, Tuple, Type, Union, Any
+from typing import Any, List, Sequence, Tuple, Type, Union
 
 import dill
 import lightning.pytorch.utilities.seed
@@ -45,10 +45,11 @@ from lightning.pytorch.utilities import disable_possible_user_warnings
 from numpy import isclose
 from numpy.random import RandomState
 from numpy.typing import NDArray
+from optuna import Study, Trial, create_study
 from pennylane import numpy as np
 from pennylane.measurements import ExpectationMP
 from pennylane.operation import Operation
-from pennylane.templates import StronglyEntanglingLayers, AngleEmbedding, AmplitudeEmbedding
+from pennylane.templates import AmplitudeEmbedding, AngleEmbedding, StronglyEntanglingLayers
 from sklearn.datasets import (
     load_digits,
     make_classification,
@@ -59,17 +60,16 @@ from sklearn.metrics import rand_score
 from torch import Tensor
 from torch.utils.data import DataLoader
 
-from aqmlator.qml import (
+from aqmlator.qml.models import (
+    AnsatzBuilder,
     QNNBinaryClassifier,
     QNNClassifier,
     QNNLinearRegression,
     QNNModel,
     QuantumKernelBinaryClassifier,
     RBMClustering,
-    AnsatzBuilder,
 )
 from aqmlator.tuner import AnsatzFinder
-from optuna import Trial, Study, create_study
 
 
 class TestAnsatzBuilder(unittest.TestCase):

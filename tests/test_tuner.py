@@ -34,6 +34,7 @@ import unittest
 from typing import Sequence
 
 import numpy as np
+import optuna
 import pennylane as qml
 from lightning.pytorch.utilities import disable_possible_user_warnings
 from numpy.random import RandomState
@@ -45,10 +46,8 @@ from sklearn.datasets import (
     make_regression,
 )
 
-from aqmlator.qml import QNNBinaryClassifier
+from aqmlator.qml.models import QNNBinaryClassifier
 from aqmlator.tuner import HyperparameterTuner, MLTaskType, ModelFinder
-
-import optuna
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 

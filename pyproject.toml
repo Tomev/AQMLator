@@ -36,10 +36,11 @@ pennylane-qiskit = "pennylane_qiskit"
 qiskit-aer = "qiskit_aer"
 scipy = "scipy"
 coverage = "coverage"
+pscycopg2-binary = "psycopg2-binary"
 
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["ruff", "dill", "psycopg2", "pennylane-lightning", "qiskit-aer"]
+DEP002 = ["ruff", "dill", "psycopg2", "pennylane-lightning", "qiskit-aer", "psycopg2-binary"]
 
 
 [tool.ruff]
