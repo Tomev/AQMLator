@@ -23,7 +23,7 @@ copyright = "2023, Tomasz Rybotycki"
 author = "Tomasz Rybotycki"
 
 # The full version, including alpha/beta/rc tags
-release = "1.1.0"
+release = "2.0.0a1"
 
 
 # -- General configuration ---------------------------------------------------
